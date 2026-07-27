@@ -327,6 +327,8 @@
       renderTasks(tasks);
     }catch(err){
       console.error('Failed to load tasks:', err);
+      const list = document.getElementById('taskList');
+      list.innerHTML = `<div class="empty-state">Couldn't load tasks: ${escapeHtml(err.message || err.code || 'unknown error')}</div>`;
     }
   }
 
@@ -374,6 +376,9 @@
       });
       titleInput.value = '';
       await loadTasks();
+    }catch(err){
+      console.error('Failed to add task:', err);
+      alert('Could not add task: ' + (err.message || err.code));
     }finally{
       addingTask = false;
     }
