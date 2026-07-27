@@ -235,7 +235,8 @@
       'auth/user-not-found': 'Incorrect email or password.',
       'auth/wrong-password': 'Incorrect email or password.'
     };
-    return map[err.code] || 'Something went wrong. Please try again.';
+    const friendly = map[err.code] || 'Something went wrong.';
+    return `${friendly} (${err.code || err.message})`;
   }
 
   // Fires on login, register, logout, and on page load if a session exists
