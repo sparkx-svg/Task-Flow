@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="TaskFlow — a simple task manager to organize your day.">
+<title>TaskFlow — Task Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0F19; --surface:#121828; --surface-2:#1A2136; --border:#262E45;
+    --text:#E8ECF4; --muted:#8A93A6; --spark:#FFB020; --blue:#5B8DEF;
+    --danger:#EF4A5C; --success:#2FCB71;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif}
+  .hidden{display:none !important}
+
+  /* ---- Auth screens ---- */
+  #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;width:100%;max-width:380px}
+  .auth-logo{font-weight:700;font-size:1.3rem;margin-bottom:6px}
+  .auth-logo span{color:var(--spark)}
+  .auth-card p.sub{color:var(--muted);font-size:.88rem;margin-bottom:24px}
+  label{font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px;margin-top:14px}
+  input{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+    padding:11px 12px;color:var(--text);font-size:.92rem;font-family:'Inter',sans-serif;
+  }
+  input:focus{outline:2px solid var(--spark);border-color:transparent}
+  .btn{
+    width:100%;padding:12px;border-radius:8px;font-weight:600;font-size:.92rem;
+    margin-top:20px;cursor:pointer;border:none;transition:transform .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--spark);color:#1A1200}
+  .switch-link{margin-top:18px;text-align:center;font-size:.85rem;color:var(--muted)}
+  .switch-link a{color:var(--blue);cursor:pointer;font-weight:600}
+  .error-msg{color:var(--danger);font-size:.82rem;margin-top:12px;min-height:16px}
+
+  /* ---- Dashboard ---- */
+  #dashboard{max-width:800px;margin:0 auto;padding:32px 20px}
+  .dash-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+  .dash-header .logo{font-weight:700;font-size:1.15rem}
+  .dash-header .logo span{color:var(--spark)}
+  .user-chip{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--muted)}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:#fff}
+  .logout-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;font-size:.8rem;cursor:pointer}
+  .logout-btn:hover{border-color:var(--danger);color:var(--danger)}
+
+  .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .stat b{font-size:1.5rem;display:block;color:var(--spark)}
+  .stat span{font-size:.78rem;color:var(--muted)}
+
+  .add-task-row{display:flex;gap:8px;margin-bottom:22px}
+  .add-task-row input{flex:1}
+  .add-task-row select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0 10px;font-size:.85rem}
+  .add-task-row button{background:var(--spark);color:#1A1200;border:none;border-radius:8px;padding:0 20px;font-weight:600;cursor:pointer;white-space:nowrap}
+
+  .task-list{display:flex;flex-direction:column;gap:8px}
+  .task-item{
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;display:flex;align-items:center;gap:12px;
+  }
+  .task-item.done{opacity:.5}
+  .task-item.done .task-title{text-decoration:line-through}
+  .task-check{width:20px;height:20px;border-radius:5px;border:2px solid var(--border);cursor:pointer;flex-shrink:0}
+  .task-check.checked{background:var(--success);border-color:var(--success)}
+  .task-title{flex:1;font-size:.92rem}
+  .priority-tag{font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;text-transform:capitalize}
+  .priority-high{background:rgba(239,74,92,.15);color:var(--danger)}
+  .priority-medium{background:rgba(255,176,32,.15);color:var(--spark)}
+  .priority-low{background:rgba(91,141,239,.15);color:var(--blue)}
+  .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px}
+  .del-btn:hover{color:var(--danger)}
+  .empty-state{text-align:center;padding:40px 0;color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">Task<span>Flow</span></div>
+    <p class="sub" id="authSub">Sign in to manage your tasks.</p>
+
+    <form id="loginForm">
+      <label>Email</label>
+      <input type="email" id="loginEmail" required>
+      <label>Password</label>
+      <input type="password" id="loginPassword" required>
+      <button type="submit" class="btn btn-primary">Sign In</button>
+      <div class="error-msg" id="loginError"></div>
+    </form>
+
+    <form id="registerForm" class="hidden">
+      <label>Name</label>
+      <input type="text" id="regName" required>
+      <label>Email</label>
+      <input type="email" id="regEmail" required>
+      <label>Password (6+ characters)</label>
+      <input type="password" id="regPassword" required minlength="6">
+      <button type="submit" class="btn btn-primary">Create Account</button>
+      <div class="error-msg" id="regError"></div>
+    </form>
+
+    <div class="switch-link" id="switchToRegister">Don't have an account? <a onclick="showRegister()">Sign up</a></div>
+    <div class="switch-link hidden" id="switchToLogin">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden">
+  <div class="dash-header">
+    <div class="logo">Task<span>Flow</span></div>
+    <div class="user-chip">
+      <div class="avatar" id="userAvatar">?</div>
+      <span id="userName"></span>
+      <button class="logout-btn" onclick="logout()">Log out</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><b id="statTotal">0</b><span>Total tasks</span></div>
+    <div class="stat"><b id="statDone">0</b><span>Completed</span></div>
+    <div class="stat"><b id="statPending">0</b><span>Pending</span></div>
+  </div>
+
+  <div class="add-task-row">
+    <input type="text" id="newTaskTitle" placeholder="Add a new task...">
+    <select id="newTaskPriority">
+      <option value="low">Low</option>
+      <option value="medium" selected>Medium</option>
+      <option value="high">High</option>
+    </select>
+    <button onclick="addTask()">Add</button>
+  </div>
+
+  <div class="task-list" id="taskList"></div>
+</div>
+
+<script type="module">
+  // ====== FIREBASE SETUP ======
+  // 1. Go to https://console.firebase.google.com, create a project.
+  // 2. Project settings → General → "Your apps" → Web app → copy the config below.
+  // 3. Enable Authentication → Sign-in method → Email/Password.
+  // 4. Enable Firestore Database (start in production or test mode).
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+  import {
+    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+    signOut, onAuthStateChanged, updateProfile
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
+    doc, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCdaqJb_ylNWeG5jGkw8EYCeeTXK9tzXyY",
+    authDomain: "task-flow-399d2.firebaseapp.com",
+    projectId: "task-flow-399d2",
+    storageBucket: "task-flow-399d2.firebasestorage.app",
+    messagingSenderId: "290330856432",
+    appId: "1:290330856432:web:2a7cac94db6fbb123feb35",
+    measurementId: "G-ET9KEDJ33F"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const tasksCol = collection(db, "tasks");
+
+  let currentUser = null;
+
+  window.showRegister = showRegister;
+  window.showLogin = showLogin;
+  window.logout = logout;
+  window.addTask = addTask;
+  window.toggleTask = toggleTask;
+  window.deleteTask = deleteTask;
+
+  function showRegister(){
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('registerForm').classList.remove('hidden');
+    document.getElementById('switchToRegister').classList.add('hidden');
+    document.getElementById('switchToLogin').classList.remove('hidden');
+    document.getElementById('authSub').textContent = 'Create an account to get started.';
+  }
+  function showLogin(){
+    document.getElementById('registerForm').classList.add('hidden');
+    document.getElementById('loginForm').classList.remove('hidden');
+    document.getElementById('switchToLogin').classList.add('hidden');
+    document.getElementById('switchToRegister').classList.remove('hidden');
+    document.getElementById('authSub').textContent = 'Sign in to manage your tasks.';
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    document.getElementById('loginError').textContent = '';
+    try{
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged below handles entering the dashboard
+    }catch(err){
+      document.getElementById('loginError').textContent = friendlyAuthError(err);
+    }
+  });
+
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('regName').value;
+    const email = document.getElementById('regEmail').value;
+    const password = document.getElementById('regPassword').value;
+    document.getElementById('regError').textContent = '';
+    try{
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: name });
+      // onAuthStateChanged below handles entering the dashboard
+    }catch(err){
+      document.getElementById('regError').textContent = friendlyAuthError(err);
+    }
+  });
+
+  function friendlyAuthError(err){
+    const map = {
+      'auth/email-already-in-use': 'That email is already registered.',
+      'auth/invalid-email': 'Enter a valid email address.',
+      'auth/weak-password': 'Password should be at least 6 characters.',
+      'auth/invalid-credential': 'Incorrect email or password.',
+      'auth/user-not-found': 'Incorrect email or password.',
+      'auth/wrong-password': 'Incorrect email or password.'
+    };
+    return map[err.code] || 'Something went wrong. Please try again.';
+  }
+
+  // Fires on login, register, logout, and on page load if a session exists
+  onAuthStateChanged(auth, (user) => {
+    if(user){
+      currentUser = user;
+      enterDashboard();
+    }else{
+      currentUser = null;
+      document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('authScreen').classList.remove('hidden');
+      showLogin();
+    }
+  });
+
+  function enterDashboard(){
+    document.getElementById('authScreen').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    const displayName = currentUser.displayName || currentUser.email;
+    document.getElementById('userName').textContent = displayName;
+    document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
+    loadTasks();
+  }
+
+  async function logout(){
+    await signOut(auth);
+  }
+
+  async function loadTasks(){
+    if(!currentUser) return;
+    const q = query(tasksCol, where('userId', '==', currentUser.uid), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTasks(tasks);
+  }
+
+  function renderTasks(tasks){
+    const list = document.getElementById('taskList');
+    document.getElementById('statTotal').textContent = tasks.length;
+    document.getElementById('statDone').textContent = tasks.filter(t=>t.status==='done').length;
+    document.getElementById('statPending').textContent = tasks.filter(t=>t.status!=='done').length;
+
+    if(tasks.length === 0){
+      list.innerHTML = '<div class="empty-state">No tasks yet — add one above to get started.</div>';
+      return;
+    }
+    list.innerHTML = tasks.map(t => `
+      <div class="task-item ${t.status==='done'?'done':''}">
+        <div class="task-check ${t.status==='done'?'checked':''}" role="checkbox" aria-checked="${t.status==='done'}" tabindex="0" onclick="toggleTask('${t.id}', '${t.status}')"></div>
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="priority-tag priority-${t.priority}">${t.priority}</div>
+        <button class="del-btn" onclick="deleteTask('${t.id}')" aria-label="Delete task">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function addTask(){
+    if(!currentUser) return;
+    const titleInput = document.getElementById('newTaskTitle');
+    const title = titleInput.value.trim();
+    if(!title) return;
+    const priority = document.getElementById('newTaskPriority').value;
+    await addDoc(tasksCol, {
+      userId: currentUser.uid,
+      title,
+      priority,
+      status: 'pending',
+      createdAt: Date.now()
+    });
+    titleInput.value = '';
+    loadTasks();
+  }
+
+  async function toggleTask(id, currentStatus){
+    const newStatus = currentStatus === 'done' ? 'pending' : 'done';
+    await updateDoc(doc(db, 'tasks', id), { status: newStatus });
+    loadTasks();
+  }
+
+  async function deleteTask(id){
+    await deleteDoc(doc(db, 'tasks', id));
+    loadTasks();
+  }
+
+  document.getElementById('newTaskTitle').addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') addTask();
+  });
+</script>
+</body>
+</html>
