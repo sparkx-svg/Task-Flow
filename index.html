@@ -93,6 +93,7 @@
       <input type="password" id="loginPassword" required>
       <button type="submit" class="btn btn-primary">Sign In</button>
       <div class="error-msg" id="loginError"></div>
+      <div class="switch-link"><a onclick="handleForgotPassword()">Forgot password?</a></div>
     </form>
 
     <form id="registerForm" class="hidden">
@@ -151,7 +152,7 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
   import {
     getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-    signOut, onAuthStateChanged, updateProfile
+    signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
@@ -182,6 +183,7 @@
   window.addTask = addTask;
   window.toggleTask = toggleTask;
   window.deleteTask = deleteTask;
+  window.handleForgotPassword = handleForgotPassword;
 
   function showRegister(){
     document.getElementById('loginForm').classList.add('hidden');
@@ -198,33 +200,82 @@
     document.getElementById('authSub').textContent = 'Sign in to manage your tasks.';
   }
 
+  function setBtnLoading(form, loading, loadingText, normalText){
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = loading;
+    btn.textContent = loading ? loadingText : normalText;
+  }
+
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
+    const form = e.target;
+    const errEl = document.getElementById('loginError');
+    errEl.textContent = '';
+    const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
-    document.getElementById('loginError').textContent = '';
+
+    if(!email || !password){
+      errEl.textContent = 'Please fill in both fields.';
+      return;
+    }
+
+    setBtnLoading(form, true, 'Signing in…', 'Sign In');
     try{
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged below handles entering the dashboard
     }catch(err){
-      document.getElementById('loginError').textContent = friendlyAuthError(err);
+      errEl.textContent = friendlyAuthError(err);
+    }finally{
+      setBtnLoading(form, false, 'Signing in…', 'Sign In');
     }
   });
 
   document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('regName').value;
-    const email = document.getElementById('regEmail').value;
+    const form = e.target;
+    const errEl = document.getElementById('regError');
+    errEl.textContent = '';
+    const name = document.getElementById('regName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
     const password = document.getElementById('regPassword').value;
-    document.getElementById('regError').textContent = '';
+
+    if(!name || !email || !password){
+      errEl.textContent = 'Please fill in all fields.';
+      return;
+    }
+    if(password.length < 6){
+      errEl.textContent = 'Password must be at least 6 characters.';
+      return;
+    }
+
+    setBtnLoading(form, true, 'Creating account…', 'Create Account');
     try{
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
       // onAuthStateChanged below handles entering the dashboard
     }catch(err){
-      document.getElementById('regError').textContent = friendlyAuthError(err);
+      errEl.textContent = friendlyAuthError(err);
+    }finally{
+      setBtnLoading(form, false, 'Creating account…', 'Create Account');
     }
   });
+
+  async function handleForgotPassword(){
+    const errEl = document.getElementById('loginError');
+    const email = document.getElementById('loginEmail').value.trim();
+    errEl.style.color = '';
+    if(!email){
+      errEl.textContent = 'Enter your email above first, then click "Forgot password?".';
+      return;
+    }
+    try{
+      await sendPasswordResetEmail(auth, email);
+      errEl.style.color = 'var(--success)';
+      errEl.textContent = 'Password reset email sent — check your inbox.';
+    }catch(err){
+      errEl.textContent = friendlyAuthError(err);
+    }
+  }
 
   function friendlyAuthError(err){
     const map = {
@@ -233,7 +284,8 @@
       'auth/weak-password': 'Password should be at least 6 characters.',
       'auth/invalid-credential': 'Incorrect email or password.',
       'auth/user-not-found': 'Incorrect email or password.',
-      'auth/wrong-password': 'Incorrect email or password.'
+      'auth/wrong-password': 'Incorrect email or password.',
+      'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.'
     };
     const friendly = map[err.code] || 'Something went wrong.';
     return `${friendly} (${err.code || err.message})`;
@@ -299,21 +351,27 @@
     return div.innerHTML;
   }
 
+  let addingTask = false;
   async function addTask(){
-    if(!currentUser) return;
+    if(!currentUser || addingTask) return;
     const titleInput = document.getElementById('newTaskTitle');
     const title = titleInput.value.trim();
     if(!title) return;
     const priority = document.getElementById('newTaskPriority').value;
-    await addDoc(tasksCol, {
-      userId: currentUser.uid,
-      title,
-      priority,
-      status: 'pending',
-      createdAt: Date.now()
-    });
-    titleInput.value = '';
-    loadTasks();
+    addingTask = true;
+    try{
+      await addDoc(tasksCol, {
+        userId: currentUser.uid,
+        title,
+        priority,
+        status: 'pending',
+        createdAt: Date.now()
+      });
+      titleInput.value = '';
+      await loadTasks();
+    }finally{
+      addingTask = false;
+    }
   }
 
   async function toggleTask(id, currentStatus){
