@@ -75,7 +75,32 @@
   .priority-low{background:rgba(91,141,239,.15);color:var(--blue)}
   .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px}
   .del-btn:hover{color:var(--danger)}
+  .edit-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:4px}
+  .edit-btn:hover{color:var(--blue)}
   .empty-state{text-align:center;padding:40px 0;color:var(--muted);font-size:.9rem}
+
+  /* ---- Loading skeleton ---- */
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:.8}}
+  .skeleton{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;height:48px;animation:pulse 1.3s ease-in-out infinite}
+  .skeleton + .skeleton{animation-delay:.15s}
+
+  /* ---- Input error shake ---- */
+  @keyframes shake{
+    10%,90%{transform:translateX(-1px)}
+    20%,80%{transform:translateX(2px)}
+    30%,50%,70%{transform:translateX(-4px)}
+    40%,60%{transform:translateX(4px)}
+  }
+  .input-error{border-color:var(--danger) !important;animation:shake .4s ease}
+
+  /* ---- Inline edit ---- */
+  .edit-title-input{
+    flex:1;background:var(--surface-2);border:1px solid var(--blue);border-radius:6px;
+    padding:6px 8px;color:var(--text);font-size:.92rem;font-family:'Inter',sans-serif;
+  }
+  .edit-priority-select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 6px;font-size:.78rem}
+  .save-btn{background:none;border:none;color:var(--success);cursor:pointer;font-size:.95rem;padding:4px}
+  .save-btn:hover{opacity:.75}
 </style>
 </head>
 <body>
@@ -156,7 +181,7 @@
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
-    doc, query, where
+    doc, query, where, onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -176,6 +201,9 @@
   const tasksCol = collection(db, "tasks");
 
   let currentUser = null;
+  let unsubscribeTasks = null;
+  let editingTaskId = null;
+  let tasksCache = [];
 
   window.showRegister = showRegister;
   window.showLogin = showLogin;
@@ -183,6 +211,9 @@
   window.addTask = addTask;
   window.toggleTask = toggleTask;
   window.deleteTask = deleteTask;
+  window.startEditTask = startEditTask;
+  window.saveEditTask = saveEditTask;
+  window.cancelEditTask = cancelEditTask;
   window.handleForgotPassword = handleForgotPassword;
 
   function showRegister(){
@@ -310,26 +341,35 @@
     const displayName = currentUser.displayName || currentUser.email;
     document.getElementById('userName').textContent = displayName;
     document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
-    loadTasks();
+    subscribeToTasks();
   }
 
   async function logout(){
+    if(unsubscribeTasks){ unsubscribeTasks(); unsubscribeTasks = null; }
+    editingTaskId = null;
     await signOut(auth);
   }
 
-  async function loadTasks(){
-    if(!currentUser) return;
-    try{
-      const q = query(tasksCol, where('userId', '==', currentUser.uid));
-      const snap = await getDocs(q);
+  function subscribeToTasks(){
+    if(unsubscribeTasks) unsubscribeTasks();
+    // Show a skeleton placeholder until the first snapshot arrives
+    document.getElementById('taskList').innerHTML =
+      '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+
+    const q = query(tasksCol, where('userId', '==', currentUser.uid));
+    // includeMetadataChanges:true lets us render local (pending) writes instantly —
+    // this is what gives add/toggle/delete their "optimistic" feel — and then
+    // re-render silently once the server confirms.
+    unsubscribeTasks = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
       const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       tasks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      tasksCache = tasks;
       renderTasks(tasks);
-    }catch(err){
-      console.error('Failed to load tasks:', err);
+    }, (err) => {
+      console.error('Task sync error:', err);
       const list = document.getElementById('taskList');
       list.innerHTML = `<div class="empty-state">Couldn't load tasks: ${escapeHtml(err.message || err.code || 'unknown error')}</div>`;
-    }
+    });
   }
 
   function renderTasks(tasks){
@@ -342,14 +382,70 @@
       list.innerHTML = '<div class="empty-state">No tasks yet — add one above to get started.</div>';
       return;
     }
-    list.innerHTML = tasks.map(t => `
+    list.innerHTML = tasks.map(t => {
+      if(t.id === editingTaskId){
+        return `
+      <div class="task-item">
+        <div class="task-check ${t.status==='done'?'checked':''}" role="checkbox" aria-checked="${t.status==='done'}" tabindex="0" onclick="toggleTask('${t.id}', '${t.status}')"></div>
+        <input class="edit-title-input" id="editInput-${t.id}" value="${escapeHtml(t.title)}" />
+        <select class="edit-priority-select" id="editPriority-${t.id}">
+          <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
+          <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
+          <option value="high" ${t.priority==='high'?'selected':''}>High</option>
+        </select>
+        <button class="save-btn" onclick="saveEditTask('${t.id}')" aria-label="Save task">✓</button>
+        <button class="del-btn" onclick="cancelEditTask()" aria-label="Cancel edit">✕</button>
+      </div>`;
+      }
+      return `
       <div class="task-item ${t.status==='done'?'done':''}">
         <div class="task-check ${t.status==='done'?'checked':''}" role="checkbox" aria-checked="${t.status==='done'}" tabindex="0" onclick="toggleTask('${t.id}', '${t.status}')"></div>
         <div class="task-title">${escapeHtml(t.title)}</div>
         <div class="priority-tag priority-${t.priority}">${t.priority}</div>
+        <button class="edit-btn" onclick="startEditTask('${t.id}')" aria-label="Edit task">✎</button>
         <button class="del-btn" onclick="deleteTask('${t.id}')" aria-label="Delete task">✕</button>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
+
+    if(editingTaskId){
+      const input = document.getElementById(`editInput-${editingTaskId}`);
+      if(input){
+        input.focus();
+        input.select();
+        input.addEventListener('keydown', (e) => {
+          if(e.key === 'Enter') saveEditTask(editingTaskId);
+          if(e.key === 'Escape') cancelEditTask();
+        });
+      }
+    }
+  }
+
+  function startEditTask(id){
+    editingTaskId = id;
+    renderTasks(tasksCache);
+  }
+
+  function cancelEditTask(){
+    editingTaskId = null;
+    renderTasks(tasksCache);
+  }
+
+  async function saveEditTask(id){
+    const input = document.getElementById(`editInput-${id}`);
+    const prioritySelect = document.getElementById(`editPriority-${id}`);
+    const title = input.value.trim();
+    if(!title){
+      input.classList.add('input-error');
+      setTimeout(() => input.classList.remove('input-error'), 400);
+      return;
+    }
+    editingTaskId = null;
+    try{
+      await updateDoc(doc(db, 'tasks', id), { title, priority: prioritySelect.value });
+    }catch(err){
+      console.error('Failed to save edit:', err);
+      alert('Could not save changes: ' + (err.message || err.code));
+    }
   }
 
   function escapeHtml(str){
@@ -363,10 +459,18 @@
     if(!currentUser || addingTask) return;
     const titleInput = document.getElementById('newTaskTitle');
     const title = titleInput.value.trim();
-    if(!title) return;
+    if(!title){
+      titleInput.classList.add('input-error');
+      titleInput.placeholder = 'Type something first…';
+      titleInput.focus();
+      setTimeout(() => titleInput.classList.remove('input-error'), 400);
+      return;
+    }
     const priority = document.getElementById('newTaskPriority').value;
     addingTask = true;
     try{
+      // No manual reload needed — onSnapshot's local-cache write reflects
+      // this immediately, then reconciles once the server confirms.
       await addDoc(tasksCol, {
         userId: currentUser.uid,
         title,
@@ -375,7 +479,6 @@
         createdAt: Date.now()
       });
       titleInput.value = '';
-      await loadTasks();
     }catch(err){
       console.error('Failed to add task:', err);
       alert('Could not add task: ' + (err.message || err.code));
@@ -386,13 +489,21 @@
 
   async function toggleTask(id, currentStatus){
     const newStatus = currentStatus === 'done' ? 'pending' : 'done';
-    await updateDoc(doc(db, 'tasks', id), { status: newStatus });
-    loadTasks();
+    try{
+      await updateDoc(doc(db, 'tasks', id), { status: newStatus });
+    }catch(err){
+      console.error('Failed to update task:', err);
+      alert('Could not update task: ' + (err.message || err.code));
+    }
   }
 
   async function deleteTask(id){
-    await deleteDoc(doc(db, 'tasks', id));
-    loadTasks();
+    try{
+      await deleteDoc(doc(db, 'tasks', id));
+    }catch(err){
+      console.error('Failed to delete task:', err);
+      alert('Could not delete task: ' + (err.message || err.code));
+    }
   }
 
   document.getElementById('newTaskTitle').addEventListener('keypress', (e) => {
