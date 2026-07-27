@@ -156,7 +156,7 @@
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
-    doc, query, where, orderBy
+    doc, query, where
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -319,10 +319,15 @@
 
   async function loadTasks(){
     if(!currentUser) return;
-    const q = query(tasksCol, where('userId', '==', currentUser.uid), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderTasks(tasks);
+    try{
+      const q = query(tasksCol, where('userId', '==', currentUser.uid));
+      const snap = await getDocs(q);
+      const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      tasks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      renderTasks(tasks);
+    }catch(err){
+      console.error('Failed to load tasks:', err);
+    }
   }
 
   function renderTasks(tasks){
