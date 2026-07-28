@@ -250,6 +250,44 @@
   .edit-priority-select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 6px;font-size:.78rem}
   .save-btn{background:none;border:none;color:var(--success);cursor:pointer;font-size:.95rem;padding:4px}
   .save-btn:hover{opacity:.75}
+
+  /* ---- List bar (personal / shared lists) ---- */
+  .list-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .list-bar select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:.85rem;font-family:'Inter',sans-serif;max-width:220px}
+  .list-bar-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif}
+  .list-bar-btn:hover{border-color:#3A455E}
+  .list-bar-spacer{flex:1}
+  .members-hint{font-size:.75rem;color:var(--muted)}
+
+  /* ---- Assignee ---- */
+  .assignee-select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0 8px;font-size:.8rem;height:34px}
+  .assignee-chip{font-size:.72rem;background:rgba(91,141,239,.15);color:var(--blue);border:1px solid rgba(91,141,239,.35);border-radius:20px;padding:2px 9px;white-space:nowrap}
+
+  /* ---- Modal (share list) ---- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(5,7,13,.6);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:380px}
+  .modal-card h3{font-size:1.05rem;margin-bottom:4px}
+  .modal-card p.sub{color:var(--muted);font-size:.82rem;margin-bottom:16px}
+  .modal-card input[type="text"],.modal-card input[type="email"]{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:.88rem;margin-bottom:10px;font-family:'Inter',sans-serif}
+  .modal-actions{display:flex;gap:8px;margin-top:6px}
+  .modal-actions button{flex:1}
+  .member-list{margin:6px 0 16px;display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto}
+  .member-row{display:flex;justify-content:space-between;align-items:center;font-size:.82rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+  .member-row .remove-member{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.75rem}
+  .modal-error{color:var(--danger);font-size:.8rem;margin:-4px 0 10px;min-height:1em}
+  .modal-close-x{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer}
+  .modal-card{position:relative}
+
+  /* ---- Export / Import ---- */
+  .data-actions{display:flex;gap:8px}
+  .data-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.8rem;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+  .data-btn:hover{border-color:#3A455E}
+
+  /* ---- Undo-delete toast ---- */
+  .toast-stack{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:200;width:100%;max-width:360px;padding:0 16px}
+  .toast{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:.85rem;animation:toast-in .18s ease}
+  .toast button{background:none;border:none;color:var(--spark);font-weight:700;cursor:pointer;font-size:.83rem;white-space:nowrap;font-family:'Inter',sans-serif}
+  @keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -350,6 +388,19 @@
     <div class="stat"><b id="statPending">0</b><span>Pending</span></div>
   </div>
 
+  <div class="list-bar">
+    <select id="listSelect" onchange="switchList(this.value)"></select>
+    <button class="list-bar-btn" id="shareListBtn" onclick="openShareModal()">Share…</button>
+    <button class="list-bar-btn" onclick="openNewListModal()">+ New shared list</button>
+    <span class="list-bar-spacer"></span>
+    <div class="data-actions">
+      <button class="data-btn" onclick="exportTasksJSON()">Export JSON</button>
+      <button class="data-btn" onclick="exportTasksCSV()">Export CSV</button>
+      <button class="data-btn" onclick="document.getElementById('importFileInput').click()">Import CSV</button>
+      <input type="file" id="importFileInput" accept=".csv" class="hidden" onchange="handleImportFile(this.files[0])">
+    </div>
+  </div>
+
   <div class="add-task-row">
     <input type="text" id="newTaskTitle" placeholder="Add a new task...">
     <input type="text" id="newTaskTags" placeholder="Tags (comma separated)" style="flex:1;min-width:140px">
@@ -364,6 +415,7 @@
       <option value="daily">Repeat daily</option>
       <option value="weekly">Repeat weekly</option>
     </select>
+    <select id="newTaskAssignee" class="assignee-select hidden"></select>
     <button onclick="addTask()">Add</button>
   </div>
 
@@ -412,6 +464,39 @@
   <div class="task-list" id="taskList"></div>
 </div>
 
+<!-- Share / new list modal -->
+<div class="modal-overlay hidden" id="shareModalOverlay">
+  <div class="modal-card">
+    <button class="modal-close-x" onclick="closeShareModal()" aria-label="Close">✕</button>
+    <h3 id="shareModalTitle">Share list</h3>
+    <p class="sub" id="shareModalSub">Invite someone by email. They'll see this list and its tasks next time they sign in.</p>
+    <div id="shareModalMembers" class="member-list"></div>
+    <input type="email" id="shareInviteEmail" placeholder="person@example.com">
+    <div class="modal-error" id="shareModalError"></div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--surface-2);color:var(--text)" onclick="closeShareModal()">Close</button>
+      <button class="btn btn-primary" id="shareInviteBtn" onclick="inviteToList()">Invite</button>
+    </div>
+  </div>
+</div>
+
+<!-- New shared list modal -->
+<div class="modal-overlay hidden" id="newListModalOverlay">
+  <div class="modal-card">
+    <button class="modal-close-x" onclick="closeNewListModal()" aria-label="Close">✕</button>
+    <h3>New shared list</h3>
+    <p class="sub">Give it a name — you can invite people once it's created.</p>
+    <input type="text" id="newListName" placeholder="e.g. Kitchen renovation">
+    <div class="modal-error" id="newListModalError"></div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--surface-2);color:var(--text)" onclick="closeNewListModal()">Cancel</button>
+      <button class="btn btn-primary" id="newListCreateBtn" onclick="createSharedList()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+
 <script type="module">
   // ====== FIREBASE SETUP ======
   // 1. Go to https://console.firebase.google.com, create a project.
@@ -428,7 +513,8 @@
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
-    doc, query, where, onSnapshot, writeBatch
+    doc, query, where, onSnapshot, writeBatch, setDoc, getDoc,
+    arrayUnion, arrayRemove, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -446,11 +532,16 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
   const tasksCol = collection(db, "tasks");
+  const listsCol = collection(db, "lists");
+  const usersCol = collection(db, "users");
 
   let currentUser = null;
   let unsubscribeTasks = null;
+  let unsubscribeLists = null;
   let editingTaskId = null;
   let tasksCache = [];
+  let myLists = [];              // shared lists the user belongs to (from 'lists' collection)
+  let currentListId = null;      // null/undefined => personal list (listId == currentUser.uid)
   let currentSort = 'custom';
   let filterStatusVal = 'all';
   let filterPriorityVal = 'all';
@@ -458,6 +549,8 @@
   let searchQueryVal = '';
   let draggedTaskId = null;
   let expandedTasks = new Set();
+  let pendingDeleteTimers = new Map(); // taskId -> setTimeout handle, for undo-delete
+  let toastSeq = 0;
   let selectedTaskIds = new Set();
 
   window.showRegister = showRegister;
@@ -488,6 +581,19 @@
   window.bulkSetPriority = bulkSetPriority;
   window.bulkDelete = bulkDelete;
   window.clearSelection = clearSelection;
+  window.switchList = switchList;
+  window.openShareModal = openShareModal;
+  window.closeShareModal = closeShareModal;
+  window.inviteToList = inviteToList;
+  window.removeMember = removeMember;
+  window.openNewListModal = openNewListModal;
+  window.closeNewListModal = closeNewListModal;
+  window.createSharedList = createSharedList;
+  window.exportTasksJSON = exportTasksJSON;
+  window.exportTasksCSV = exportTasksCSV;
+  window.handleImportFile = handleImportFile;
+  window.undoDeleteTask = undoDeleteTask;
+  window.reassignTask = reassignTask;
 
   function showRegister(){
     document.getElementById('loginForm').classList.add('hidden');
@@ -682,13 +788,184 @@
     const displayName = currentUser.displayName || currentUser.email;
     document.getElementById('userName').textContent = displayName;
     document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
+    currentListId = currentUser.uid; // default to personal list
+    // Keep a lightweight profile doc so other users can find this account by email
+    // when inviting them to a shared list (Firestore can't query auth users by email).
+    setDoc(doc(db, 'users', currentUser.uid), {
+      email: currentUser.email,
+      displayName: displayName
+    }, { merge: true }).catch(err => console.error('Failed to sync user profile:', err));
+    subscribeToLists();
     subscribeToTasks();
   }
 
   async function logout(){
     if(unsubscribeTasks){ unsubscribeTasks(); unsubscribeTasks = null; }
+    if(unsubscribeLists){ unsubscribeLists(); unsubscribeLists = null; }
+    pendingDeleteTimers.forEach(t => clearTimeout(t));
+    pendingDeleteTimers.clear();
+    document.getElementById('toastStack').innerHTML = '';
     editingTaskId = null;
+    myLists = [];
+    currentListId = null;
     await signOut(auth);
+  }
+
+  // ---- Shared lists ----
+  function subscribeToLists(){
+    if(unsubscribeLists) unsubscribeLists();
+    const q = query(listsCol, where('memberUids', 'array-contains', currentUser.uid));
+    unsubscribeLists = onSnapshot(q, (snap) => {
+      myLists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderListSelect();
+      renderAssigneeOptions();
+    }, (err) => console.error('List sync error:', err));
+  }
+
+  function getCurrentList(){
+    return myLists.find(l => l.id === currentListId) || null;
+  }
+
+  function renderListSelect(){
+    const sel = document.getElementById('listSelect');
+    const prevValue = sel.value || currentListId;
+    sel.innerHTML = '<option value="__personal__">Personal</option>' +
+      myLists.map(l => `<option value="${l.id}">${escapeHtml(l.name)} (shared)</option>`).join('');
+    const wanted = currentListId === currentUser.uid ? '__personal__' : currentListId;
+    sel.value = Array.from(sel.options).some(o => o.value === wanted) ? wanted : '__personal__';
+    if(sel.value === '__personal__' && currentListId !== currentUser.uid) currentListId = currentUser.uid;
+    const isShared = currentListId !== currentUser.uid;
+    document.getElementById('shareListBtn').classList.toggle('hidden', !isShared);
+  }
+
+  function switchList(value){
+    currentListId = value === '__personal__' ? currentUser.uid : value;
+    clearSelection();
+    expandedTasks.clear();
+    document.getElementById('shareListBtn').classList.toggle('hidden', value === '__personal__');
+    renderAssigneeOptions();
+    subscribeToTasks();
+  }
+
+  function renderAssigneeOptions(){
+    const list = getCurrentList();
+    const shared = !!list;
+    const newSel = document.getElementById('newTaskAssignee');
+    newSel.classList.toggle('hidden', !shared);
+    if(shared){
+      const members = list.memberEmails || [];
+      newSel.innerHTML = '<option value="">Unassigned</option>' +
+        members.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
+    }
+  }
+
+  // ---- Share modal ----
+  function openShareModal(){
+    const list = getCurrentList();
+    if(!list) return;
+    document.getElementById('shareModalTitle').textContent = `Share "${list.name}"`;
+    document.getElementById('shareInviteEmail').value = '';
+    document.getElementById('shareModalError').textContent = '';
+    renderShareModalMembers();
+    document.getElementById('shareModalOverlay').classList.remove('hidden');
+  }
+  function closeShareModal(){
+    document.getElementById('shareModalOverlay').classList.add('hidden');
+  }
+  function renderShareModalMembers(){
+    const list = getCurrentList();
+    if(!list) return;
+    const emails = list.memberEmails || [];
+    document.getElementById('shareModalMembers').innerHTML = emails.map(e => `
+      <div class="member-row">
+        <span>${escapeHtml(e)}${e === currentUser.email ? ' (you, owner)' : ''}</span>
+        ${(list.ownerId === currentUser.uid && e !== currentUser.email)
+          ? `<button class="remove-member" onclick="removeMember('${escapeHtml(e)}')">Remove</button>` : ''}
+      </div>`).join('');
+  }
+  async function inviteToList(){
+    const list = getCurrentList();
+    if(!list) return;
+    const emailInput = document.getElementById('shareInviteEmail');
+    const errorEl = document.getElementById('shareModalError');
+    const email = emailInput.value.trim().toLowerCase();
+    errorEl.textContent = '';
+    if(!email){ errorEl.textContent = 'Enter an email address.'; return; }
+    if((list.memberEmails || []).map(e => e.toLowerCase()).includes(email)){
+      errorEl.textContent = 'Already a member of this list.'; return;
+    }
+    const btn = document.getElementById('shareInviteBtn');
+    btn.disabled = true;
+    try{
+      const q = query(usersCol, where('email', '==', email));
+      const snap = await getDocs(q);
+      if(snap.empty){
+        errorEl.textContent = "No TaskFlow account found for that email — ask them to sign up first.";
+        return;
+      }
+      const uid = snap.docs[0].id;
+      await updateDoc(doc(db, 'lists', list.id), {
+        memberUids: arrayUnion(uid),
+        memberEmails: arrayUnion(email)
+      });
+      emailInput.value = '';
+      renderShareModalMembers();
+    }catch(err){
+      console.error('Invite failed:', err);
+      errorEl.textContent = 'Could not send invite: ' + (err.message || err.code);
+    }finally{
+      btn.disabled = false;
+    }
+  }
+  async function removeMember(email){
+    const list = getCurrentList();
+    if(!list || list.ownerId !== currentUser.uid) return;
+    try{
+      const snap = await getDocs(query(usersCol, where('email', '==', email)));
+      const updates = { memberEmails: arrayRemove(email) };
+      if(!snap.empty) updates.memberUids = arrayRemove(snap.docs[0].id);
+      await updateDoc(doc(db, 'lists', list.id), updates);
+      renderShareModalMembers();
+    }catch(err){
+      console.error('Failed to remove member:', err);
+      alert('Could not remove member: ' + (err.message || err.code));
+    }
+  }
+
+  // ---- New shared list ----
+  function openNewListModal(){
+    document.getElementById('newListName').value = '';
+    document.getElementById('newListModalError').textContent = '';
+    document.getElementById('newListModalOverlay').classList.remove('hidden');
+  }
+  function closeNewListModal(){
+    document.getElementById('newListModalOverlay').classList.add('hidden');
+  }
+  async function createSharedList(){
+    const nameInput = document.getElementById('newListName');
+    const errorEl = document.getElementById('newListModalError');
+    const name = nameInput.value.trim();
+    if(!name){ errorEl.textContent = 'Give the list a name.'; return; }
+    const btn = document.getElementById('newListCreateBtn');
+    btn.disabled = true;
+    try{
+      const ref = await addDoc(listsCol, {
+        name,
+        ownerId: currentUser.uid,
+        memberUids: [currentUser.uid],
+        memberEmails: [currentUser.email],
+        createdAt: Date.now()
+      });
+      closeNewListModal();
+      currentListId = ref.id;
+      // renderListSelect() will run on the next 'lists' snapshot; select it once it appears
+      setTimeout(() => { document.getElementById('listSelect').value = ref.id; switchList(ref.id); }, 300);
+    }catch(err){
+      console.error('Failed to create list:', err);
+      errorEl.textContent = 'Could not create list: ' + (err.message || err.code);
+    }finally{
+      btn.disabled = false;
+    }
   }
 
   function subscribeToTasks(){
@@ -697,12 +974,20 @@
     document.getElementById('taskList').innerHTML =
       '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
 
-    const q = query(tasksCol, where('userId', '==', currentUser.uid));
+    const isPersonal = currentListId === currentUser.uid;
+    // Personal view: fall back to the legacy userId-only query so tasks created
+    // before shared lists existed (no listId field) still show up; shared-list
+    // tasks the same user authored are filtered out client-side below.
+    // Shared view: query the list's tasks directly so every member sees them.
+    const q = isPersonal
+      ? query(tasksCol, where('userId', '==', currentUser.uid))
+      : query(tasksCol, where('listId', '==', currentListId));
     // includeMetadataChanges:true lets us render local (pending) writes instantly —
     // this is what gives add/toggle/delete their "optimistic" feel — and then
     // re-render silently once the server confirms.
     unsubscribeTasks = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
-      const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      let tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if(isPersonal) tasks = tasks.filter(t => !t.listId || t.listId === currentUser.uid);
       tasksCache = tasks;
       renderTasks();
     }, (err) => {
@@ -803,11 +1088,14 @@
     updateDragHint();
     updateTagFilterOptions();
     const list = document.getElementById('taskList');
-    document.getElementById('statTotal').textContent = tasksCache.length;
-    document.getElementById('statDone').textContent = tasksCache.filter(t=>t.status==='done').length;
-    document.getElementById('statPending').textContent = tasksCache.filter(t=>t.status!=='done').length;
+    // Hide tasks that are in the undo-delete grace period, so they disappear
+    // from the list instantly while the actual Firestore delete is delayed.
+    const visibleCache = tasksCache.filter(t => !pendingDeleteTimers.has(t.id));
+    document.getElementById('statTotal').textContent = visibleCache.length;
+    document.getElementById('statDone').textContent = visibleCache.filter(t=>t.status==='done').length;
+    document.getElementById('statPending').textContent = visibleCache.filter(t=>t.status!=='done').length;
 
-    const tasks = sortTasks(filterTasks(tasksCache));
+    const tasks = sortTasks(filterTasks(visibleCache));
     const dragOn = isDragEnabled();
 
     // Drop any selected ids that are no longer visible/present, keep the bulk bar honest
@@ -827,7 +1115,7 @@
     selectAllBox.checked = tasks.length > 0 && visibleSelectedCount === tasks.length;
     selectAllBox.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < tasks.length;
 
-    if(tasksCache.length === 0){
+    if(visibleCache.length === 0){
       list.innerHTML = '<div class="empty-state">No tasks yet — add one above to get started.</div>';
       return;
     }
@@ -843,6 +1131,13 @@
         ? `<div class="recur-tag">↻ ${t.recurrence === 'weekly' ? 'Weekly' : 'Daily'}</div>`
         : '';
       const tagChips = (t.tags || []).map(tag => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('');
+      const listForTask = myLists.find(l => l.id === t.listId);
+      const assigneeControl = listForTask
+        ? `<select class="assignee-select" onchange="reassignTask('${t.id}', this.value)" aria-label="Assignee">
+             <option value="">Unassigned</option>
+             ${(listForTask.memberEmails || []).map(e => `<option value="${escapeHtml(e)}" ${t.assigneeEmail===e?'selected':''}>${escapeHtml(e)}</option>`).join('')}
+           </select>`
+        : (t.assigneeEmail ? `<span class="assignee-chip">${escapeHtml(t.assigneeEmail)}</span>` : '');
 
       if(t.id === editingTaskId){
         return `
@@ -898,6 +1193,7 @@
         ${recurTag}
         ${dueTag}
         <div class="priority-tag priority-${t.priority}">${t.priority}</div>
+        ${assigneeControl}
         ${subtaskToggle}
         <button class="edit-btn" onclick="startEditTask('${t.id}')" aria-label="Edit task">✎</button>
         <button class="del-btn" onclick="deleteTask('${t.id}')" aria-label="Delete task">✕</button>
@@ -1050,6 +1346,8 @@
     const tags = parseTagsInput(tagsInput.value);
     const recurrenceSelect = document.getElementById('newTaskRecurrence');
     const recurrence = recurrenceSelect.value || null;
+    const assigneeSelect = document.getElementById('newTaskAssignee');
+    const assigneeEmail = (!assigneeSelect.classList.contains('hidden') && assigneeSelect.value) || null;
     const maxOrder = tasksCache.reduce((max, t) => Math.max(max, t.order ?? -1), -1);
     addingTask = true;
     try{
@@ -1057,6 +1355,8 @@
       // this immediately, then reconciles once the server confirms.
       await addDoc(tasksCol, {
         userId: currentUser.uid,
+        listId: currentListId,
+        assigneeEmail,
         title,
         priority,
         dueDate,
@@ -1071,11 +1371,21 @@
       dueDateInput.value = '';
       tagsInput.value = '';
       recurrenceSelect.value = '';
+      if(assigneeSelect) assigneeSelect.value = '';
     }catch(err){
       console.error('Failed to add task:', err);
       alert('Could not add task: ' + (err.message || err.code));
     }finally{
       addingTask = false;
+    }
+  }
+
+  async function reassignTask(id, email){
+    try{
+      await updateDoc(doc(db, 'tasks', id), { assigneeEmail: email || null });
+    }catch(err){
+      console.error('Failed to reassign task:', err);
+      alert('Could not reassign task: ' + (err.message || err.code));
     }
   }
 
@@ -1112,6 +1422,8 @@
     try{
       await addDoc(tasksCol, {
         userId: currentUser.uid,
+        listId: task.listId || currentUser.uid,
+        assigneeEmail: task.assigneeEmail || null,
         title: task.title,
         priority: task.priority,
         dueDate: nextDue,
@@ -1127,15 +1439,59 @@
     }
   }
 
-  async function deleteTask(id){
+  const UNDO_DELETE_MS = 5000;
+
+  function deleteTask(id){
+    const task = getTask(id);
+    if(!task || pendingDeleteTimers.has(id)) return;
+    selectedTaskIds.delete(id);
+    expandedTasks.delete(id);
+    const timer = setTimeout(() => finalizeDelete(id), UNDO_DELETE_MS);
+    pendingDeleteTimers.set(id, timer);
+    renderTasks();
+    showToast(`"${task.title.length > 40 ? task.title.slice(0,40)+'…' : task.title}" deleted`, () => undoDeleteTask(id), id);
+  }
+
+  async function finalizeDelete(id){
+    if(!pendingDeleteTimers.has(id)) return; // already undone
+    pendingDeleteTimers.delete(id);
     try{
       await deleteDoc(doc(db, 'tasks', id));
-      selectedTaskIds.delete(id);
-      expandedTasks.delete(id);
     }catch(err){
       console.error('Failed to delete task:', err);
       alert('Could not delete task: ' + (err.message || err.code));
+      renderTasks();
     }
+  }
+
+  function undoDeleteTask(id){
+    const timer = pendingDeleteTimers.get(id);
+    if(timer){ clearTimeout(timer); pendingDeleteTimers.delete(id); }
+    dismissToast(id);
+    renderTasks();
+  }
+
+  // ---- Toasts (undo delete) ----
+  function showToast(message, onUndo, toastId){
+    const stack = document.getElementById('toastStack');
+    const id = toastId != null ? `toast-${toastId}` : `toast-anon-${toastSeq++}`;
+    const existing = document.getElementById(id);
+    if(existing) existing.remove();
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.id = id;
+    el.innerHTML = `<span></span>`;
+    el.querySelector('span').textContent = message;
+    const btn = document.createElement('button');
+    btn.textContent = 'Undo';
+    btn.onclick = () => { onUndo(); el.remove(); };
+    el.appendChild(btn);
+    stack.appendChild(el);
+    setTimeout(() => { if(document.getElementById(id)) document.getElementById(id).remove(); }, UNDO_DELETE_MS + 300);
+  }
+  function dismissToast(toastId){
+    const el = document.getElementById(`toast-${toastId}`);
+    if(el) el.remove();
   }
 
   // ---- Subtasks / checklist ----
@@ -1244,18 +1600,137 @@
     }
   }
 
-  async function bulkDelete(){
+  function bulkDelete(){
     if(selectedTaskIds.size === 0) return;
-    const ids = Array.from(selectedTaskIds);
-    if(!confirm(`Delete ${ids.length} selected task${ids.length > 1 ? 's' : ''}? This can't be undone.`)) return;
+    const ids = Array.from(selectedTaskIds).filter(id => !pendingDeleteTimers.has(id));
+    if(ids.length === 0) return;
+    const bulkId = `bulk-${Date.now()}`;
+    ids.forEach(id => {
+      expandedTasks.delete(id);
+      pendingDeleteTimers.set(id, setTimeout(() => finalizeDelete(id), UNDO_DELETE_MS));
+    });
+    clearSelection();
+    renderTasks();
+    showToast(`${ids.length} task${ids.length > 1 ? 's' : ''} deleted`, () => {
+      ids.forEach(id => undoDeleteTask(id));
+    }, bulkId);
+  }
+
+  // ---- Export ----
+  function exportableTasks(){
+    return tasksCache.filter(t => !pendingDeleteTimers.has(t.id));
+  }
+  function downloadBlob(content, filename, type){
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+  function exportTasksJSON(){
+    const data = exportableTasks().map(t => ({
+      title: t.title, status: t.status, priority: t.priority, dueDate: t.dueDate || '',
+      tags: t.tags || [], recurrence: t.recurrence || '', assigneeEmail: t.assigneeEmail || '',
+      subtasks: t.subtasks || []
+    }));
+    downloadBlob(JSON.stringify(data, null, 2), 'taskflow-export.json', 'application/json');
+  }
+  function csvEscape(val){
+    const s = String(val ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  function exportTasksCSV(){
+    const rows = [['title','status','priority','dueDate','tags','recurrence','assigneeEmail']];
+    exportableTasks().forEach(t => {
+      rows.push([
+        t.title, t.status, t.priority, t.dueDate || '',
+        (t.tags || []).join(';'), t.recurrence || '', t.assigneeEmail || ''
+      ]);
+    });
+    const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+    downloadBlob(csv, 'taskflow-export.csv', 'text/csv');
+  }
+
+  // ---- Import ----
+  function parseCSV(text){
+    // Minimal RFC4180-ish parser: handles quoted fields, escaped quotes, commas/newlines in quotes.
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for(let i = 0; i < text.length; i++){
+      const c = text[i], next = text[i+1];
+      if(inQuotes){
+        if(c === '"' && next === '"'){ field += '"'; i++; }
+        else if(c === '"'){ inQuotes = false; }
+        else field += c;
+      }else{
+        if(c === '"') inQuotes = true;
+        else if(c === ','){ row.push(field); field = ''; }
+        else if(c === '\n' || c === '\r'){
+          if(c === '\r' && next === '\n') i++;
+          row.push(field); field = '';
+          if(row.some(f => f !== '')) rows.push(row);
+          row = [];
+        }else field += c;
+      }
+    }
+    if(field !== '' || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+  async function handleImportFile(file){
+    if(!file) return;
+    const fileInput = document.getElementById('importFileInput');
     try{
-      const batch = writeBatch(db);
-      ids.forEach(id => batch.delete(doc(db, 'tasks', id)));
-      await batch.commit();
-      clearSelection();
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if(rows.length < 2){ alert('That CSV has no data rows to import.'); return; }
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      const idx = (name) => header.indexOf(name);
+      const titleIdx = idx('title');
+      if(titleIdx === -1){ alert('CSV needs at least a "title" column.'); return; }
+      const dataRows = rows.slice(1).filter(r => (r[titleIdx] || '').trim());
+      if(dataRows.length === 0){ alert('No valid rows with a title were found.'); return; }
+      if(!confirm(`Import ${dataRows.length} task${dataRows.length > 1 ? 's' : ''} into "${getCurrentList()?.name || 'Personal'}"?`)) return;
+
+      const maxOrder = tasksCache.reduce((max, t) => Math.max(max, t.order ?? -1), -1);
+      const chunks = [];
+      for(let i = 0; i < dataRows.length; i += 400) chunks.push(dataRows.slice(i, i + 400));
+      let imported = 0;
+      for(const chunk of chunks){
+        const batch = writeBatch(db);
+        chunk.forEach((r, i) => {
+          const priority = ['low','medium','high'].includes((r[idx('priority')]||'').trim())
+            ? r[idx('priority')].trim() : 'medium';
+          const status = (r[idx('status')]||'').trim() === 'done' ? 'done' : 'pending';
+          const tags = idx('tags') > -1 ? parseTagsInput((r[idx('tags')]||'').replace(/;/g, ',')) : [];
+          const recurrence = ['daily','weekly'].includes((r[idx('recurrence')]||'').trim())
+            ? r[idx('recurrence')].trim() : null;
+          const dueDate = idx('duedate') > -1 && r[idx('duedate')].trim() ? r[idx('duedate')].trim() : null;
+          const assigneeEmail = idx('assigneeemail') > -1 && r[idx('assigneeemail')].trim() ? r[idx('assigneeemail')].trim() : null;
+          const ref = doc(tasksCol);
+          batch.set(ref, {
+            userId: currentUser.uid,
+            listId: currentListId,
+            assigneeEmail,
+            title: r[titleIdx].trim(),
+            priority, dueDate, tags, recurrence,
+            subtasks: [],
+            status,
+            createdAt: Date.now(),
+            order: maxOrder + 1 + imported + i
+          });
+        });
+        await batch.commit();
+        imported += chunk.length;
+      }
     }catch(err){
-      console.error('Bulk delete failed:', err);
-      alert('Could not delete selected tasks: ' + (err.message || err.code));
+      console.error('Import failed:', err);
+      alert('Could not import CSV: ' + (err.message || err.code));
+    }finally{
+      fileInput.value = '';
     }
   }
 
