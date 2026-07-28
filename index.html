@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+  // Applied before CSS/paint to avoid a flash of the wrong theme.
+  (function(){
+    try{
+      var theme = localStorage.getItem('taskflow-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    }catch(e){}
+  })();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="TaskFlow — a simple task manager to organize your day.">
@@ -11,6 +20,11 @@
     --bg:#0B0F19; --surface:#121828; --surface-2:#1A2136; --border:#262E45;
     --text:#E8ECF4; --muted:#8A93A6; --spark:#FFB020; --blue:#5B8DEF;
     --danger:#EF4A5C; --success:#2FCB71;
+  }
+  [data-theme="light"]{
+    --bg:#F5F6FA; --surface:#FFFFFF; --surface-2:#EEF1F8; --border:#DCE1EE;
+    --text:#171B26; --muted:#5C6478; --spark:#B9770E; --blue:#3462C7;
+    --danger:#C6303E; --success:#1E9E5A;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
@@ -288,6 +302,41 @@
   .toast{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:.85rem;animation:toast-in .18s ease}
   .toast button{background:none;border:none;color:var(--spark);font-weight:700;cursor:pointer;font-size:.83rem;white-space:nowrap;font-family:'Inter',sans-serif}
   @keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ---- Header icon buttons (theme / density / account) ---- */
+  .icon-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:.95rem;font-family:'Inter',sans-serif}
+  .icon-btn:hover{border-color:#3A455E}
+  [data-theme="light"] input[type="date"]{color-scheme:light}
+
+  /* ---- Density ---- */
+  .task-list.compact{gap:4px}
+  .task-list.compact .task-item{padding:7px 12px;gap:8px}
+  .task-list.compact .task-title{font-size:.83rem}
+  .task-list.compact .subtask-panel{padding:8px 10px}
+
+  /* ---- Email verification banner ---- */
+  .verify-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(255,176,32,.1);border:1px solid rgba(255,176,32,.35);color:var(--text);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:.82rem;flex-wrap:wrap}
+  .verify-banner .verify-actions{display:flex;gap:8px;align-items:center}
+  .verify-banner button{background:none;border:none;color:var(--spark);font-weight:700;cursor:pointer;font-size:.8rem;font-family:'Inter',sans-serif}
+  .verify-banner .dismiss-x{color:var(--muted);font-weight:400}
+
+  /* ---- Load more ---- */
+  .load-more-row{display:flex;justify-content:center;margin-top:14px}
+  .load-more-row button{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 18px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+  .load-more-row button:hover{border-color:#3A455E}
+
+  /* ---- Account settings modal ---- */
+  .profile-avatar-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .profile-avatar-preview{width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--muted);object-fit:cover}
+  .profile-field-label{font-size:.8rem;color:var(--muted);display:block;margin:12px 0 6px}
+  .verified-badge{font-size:.72rem;padding:2px 8px;border-radius:20px;font-weight:600}
+  .verified-badge.yes{background:rgba(47,203,113,.15);color:var(--success)}
+  .verified-badge.no{background:rgba(255,176,32,.15);color:var(--spark)}
+  .danger-zone{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+  .danger-zone h4{font-size:.85rem;color:var(--danger);margin-bottom:6px}
+  .danger-zone p{font-size:.78rem;color:var(--muted);margin-bottom:10px}
+  .danger-btn{background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:8px 14px;font-size:.8rem;font-weight:600;cursor:pointer;width:100%;font-family:'Inter',sans-serif}
+  .danger-btn:hover{background:rgba(239,74,92,.1)}
 </style>
 </head>
 <body>
@@ -376,9 +425,20 @@
   <div class="dash-header">
     <div class="logo">Task<span>Flow</span></div>
     <div class="user-chip">
-      <div class="avatar" id="userAvatar">?</div>
+      <button class="icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle light/dark theme">◐</button>
+      <button class="icon-btn" id="densityToggleBtn" onclick="toggleDensity()" title="Toggle compact/comfortable spacing">☰</button>
+      <div class="avatar" id="userAvatar" onclick="openProfileModal()" style="cursor:pointer" title="Account settings">?</div>
       <span id="userName"></span>
       <button class="logout-btn" onclick="logout()">Log out</button>
+    </div>
+  </div>
+
+  <div class="verify-banner hidden" id="verifyBanner">
+    <span>Please verify your email address to secure your account.</span>
+    <div class="verify-actions">
+      <button onclick="resendVerificationEmail()">Resend email</button>
+      <button onclick="recheckVerification()">I've verified — refresh</button>
+      <button class="dismiss-x" onclick="dismissVerifyBanner()">Dismiss</button>
     </div>
   </div>
 
@@ -462,6 +522,9 @@
   </div>
 
   <div class="task-list" id="taskList"></div>
+  <div class="load-more-row hidden" id="loadMoreRow">
+    <button onclick="loadMoreTasks()" id="loadMoreBtn">Load more tasks</button>
+  </div>
 </div>
 
 <!-- Share / new list modal -->
@@ -497,6 +560,44 @@
 
 <div class="toast-stack" id="toastStack"></div>
 
+<!-- Account settings modal -->
+<div class="modal-overlay hidden" id="profileModalOverlay">
+  <div class="modal-card">
+    <button class="modal-close-x" onclick="closeProfileModal()" aria-label="Close">✕</button>
+    <h3>Account settings</h3>
+    <p class="sub">Update your profile or manage your account.</p>
+
+    <div class="profile-avatar-row">
+      <img class="profile-avatar-preview" id="profilePhotoPreview" src="" alt="" style="display:none">
+      <div class="profile-avatar-preview" id="profilePhotoFallback">?</div>
+      <div style="font-size:.82rem;color:var(--muted)" id="profileEmailLine"></div>
+    </div>
+
+    <label class="profile-field-label">Display name</label>
+    <input type="text" id="profileNameInput" placeholder="Your name">
+    <label class="profile-field-label">Photo URL</label>
+    <input type="text" id="profilePhotoInput" placeholder="https://…">
+
+    <div style="display:flex;align-items:center;gap:8px;margin-top:14px">
+      <span style="font-size:.8rem;color:var(--muted)">Email status:</span>
+      <span class="verified-badge" id="profileVerifiedBadge">…</span>
+      <button class="list-bar-btn" id="profileResendBtn" onclick="resendVerificationEmail()" style="display:none">Resend verification</button>
+    </div>
+
+    <div class="modal-error" id="profileModalError"></div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--surface-2);color:var(--text)" onclick="closeProfileModal()">Cancel</button>
+      <button class="btn btn-primary" id="profileSaveBtn" onclick="saveProfile()">Save</button>
+    </div>
+
+    <div class="danger-zone">
+      <h4>Delete account</h4>
+      <p>Permanently deletes your account, your personal tasks, and removes you from any shared lists. This can't be undone.</p>
+      <button class="danger-btn" onclick="deleteAccount()" id="deleteAccountBtn">Delete my account</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   // ====== FIREBASE SETUP ======
   // 1. Go to https://console.firebase.google.com, create a project.
@@ -509,12 +610,13 @@
     getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
     signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail,
     GoogleAuthProvider, signInWithPopup, setPersistence,
-    browserLocalPersistence, browserSessionPersistence
+    browserLocalPersistence, browserSessionPersistence,
+    sendEmailVerification, deleteUser
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
     doc, query, where, onSnapshot, writeBatch, setDoc, getDoc,
-    arrayUnion, arrayRemove, serverTimestamp
+    arrayUnion, arrayRemove, serverTimestamp, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -551,6 +653,9 @@
   let expandedTasks = new Set();
   let pendingDeleteTimers = new Map(); // taskId -> setTimeout handle, for undo-delete
   let toastSeq = 0;
+  let pageSize = 50;              // Firestore query limit — grows via "Load more"
+  let lastSnapCount = 0;          // docs returned by the most recent snapshot, to know if more may exist
+  let verifyBannerDismissed = false;
   let selectedTaskIds = new Set();
 
   window.showRegister = showRegister;
@@ -594,6 +699,66 @@
   window.handleImportFile = handleImportFile;
   window.undoDeleteTask = undoDeleteTask;
   window.reassignTask = reassignTask;
+  window.toggleTheme = toggleTheme;
+  window.toggleDensity = toggleDensity;
+  window.openProfileModal = openProfileModal;
+  window.closeProfileModal = closeProfileModal;
+  window.saveProfile = saveProfile;
+  window.resendVerificationEmail = resendVerificationEmail;
+  window.recheckVerification = recheckVerification;
+  window.dismissVerifyBanner = dismissVerifyBanner;
+  window.deleteAccount = deleteAccount;
+  window.loadMoreTasks = loadMoreTasks;
+
+  // ---- Theme (light/dark) ----
+  function toggleTheme(){
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try{ localStorage.setItem('taskflow-theme', next); }catch(e){}
+    updateThemeBtn();
+  }
+  function updateThemeBtn(){
+    const btn = document.getElementById('themeToggleBtn');
+    if(!btn) return;
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    btn.textContent = isLight ? '☀' : '◐';
+    btn.title = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+  }
+
+  // ---- Density (compact/comfortable) ----
+  function getDensity(){
+    try{ return localStorage.getItem('taskflow-density') || 'comfortable'; }catch(e){ return 'comfortable'; }
+  }
+  function applyDensity(){
+    const density = getDensity();
+    document.getElementById('taskList').classList.toggle('compact', density === 'compact');
+    const btn = document.getElementById('densityToggleBtn');
+    if(btn) btn.title = density === 'compact' ? 'Switch to comfortable spacing' : 'Switch to compact spacing';
+  }
+  function toggleDensity(){
+    const next = getDensity() === 'compact' ? 'comfortable' : 'compact';
+    try{ localStorage.setItem('taskflow-density', next); }catch(e){}
+    applyDensity();
+  }
+
+  // ---- Keyboard shortcuts: n = new task, / = focus search ----
+  document.addEventListener('keydown', (e) => {
+    if(document.getElementById('dashboard').classList.contains('hidden')) return; // only while signed in
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement.isContentEditable;
+    const modalOpen = !document.getElementById('profileModalOverlay').classList.contains('hidden') ||
+      !document.getElementById('shareModalOverlay').classList.contains('hidden') ||
+      !document.getElementById('newListModalOverlay').classList.contains('hidden');
+    if(modalOpen) return;
+    if(e.key === '/' && !typing){
+      e.preventDefault();
+      document.getElementById('searchInput').focus();
+    }else if((e.key === 'n' || e.key === 'N') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){
+      e.preventDefault();
+      document.getElementById('newTaskTitle').focus();
+    }
+  });
 
   function showRegister(){
     document.getElementById('loginForm').classList.add('hidden');
@@ -728,6 +893,7 @@
     try{
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
+      sendEmailVerification(cred.user).catch(err => console.error('Failed to send verification email:', err));
       // onAuthStateChanged below handles entering the dashboard
     }catch(err){
       errEl.textContent = friendlyAuthError(err);
@@ -785,6 +951,8 @@
   function enterDashboard(){
     document.getElementById('authScreen').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
+    updateThemeBtn();
+    applyDensity();
     const displayName = currentUser.displayName || currentUser.email;
     document.getElementById('userName').textContent = displayName;
     document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
@@ -795,8 +963,42 @@
       email: currentUser.email,
       displayName: displayName
     }, { merge: true }).catch(err => console.error('Failed to sync user profile:', err));
+    updateVerifyBanner();
     subscribeToLists();
     subscribeToTasks();
+  }
+
+  function updateVerifyBanner(){
+    const banner = document.getElementById('verifyBanner');
+    const show = currentUser && !currentUser.emailVerified &&
+      currentUser.providerData.some(p => p.providerId === 'password') && // Google accounts are pre-verified
+      !verifyBannerDismissed;
+    banner.classList.toggle('hidden', !show);
+  }
+  function dismissVerifyBanner(){
+    verifyBannerDismissed = true;
+    updateVerifyBanner();
+  }
+  async function resendVerificationEmail(){
+    try{
+      await sendEmailVerification(currentUser);
+      alert('Verification email sent — check your inbox.');
+    }catch(err){
+      console.error('Failed to send verification email:', err);
+      alert('Could not send verification email: ' + (err.message || err.code));
+    }
+  }
+  async function recheckVerification(){
+    try{
+      await currentUser.reload();
+      currentUser = auth.currentUser;
+      updateVerifyBanner();
+      renderProfileModal();
+      if(currentUser.emailVerified) alert("You're verified!");
+      else alert("Still not verified yet — check your inbox (and spam folder).");
+    }catch(err){
+      console.error('Failed to refresh verification status:', err);
+    }
   }
 
   async function logout(){
@@ -808,10 +1010,120 @@
     editingTaskId = null;
     myLists = [];
     currentListId = null;
+    verifyBannerDismissed = false;
+    pageSize = 50;
     await signOut(auth);
   }
 
   // ---- Shared lists ----
+  // ---- Account settings modal ----
+  function openProfileModal(){
+    renderProfileModal();
+    document.getElementById('profileModalError').textContent = '';
+    document.getElementById('profileModalOverlay').classList.remove('hidden');
+  }
+  function closeProfileModal(){
+    document.getElementById('profileModalOverlay').classList.add('hidden');
+  }
+  function renderProfileModal(){
+    if(!currentUser) return;
+    document.getElementById('profileNameInput').value = currentUser.displayName || '';
+    document.getElementById('profilePhotoInput').value = currentUser.photoURL || '';
+    document.getElementById('profileEmailLine').textContent = currentUser.email || '';
+    const img = document.getElementById('profilePhotoPreview');
+    const fallback = document.getElementById('profilePhotoFallback');
+    if(currentUser.photoURL){
+      img.src = currentUser.photoURL;
+      img.style.display = 'block';
+      fallback.style.display = 'none';
+    }else{
+      img.style.display = 'none';
+      fallback.style.display = 'flex';
+      fallback.textContent = (currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase();
+    }
+    const badge = document.getElementById('profileVerifiedBadge');
+    const isPasswordAccount = currentUser.providerData.some(p => p.providerId === 'password');
+    if(!isPasswordAccount){
+      badge.textContent = 'Verified via Google';
+      badge.className = 'verified-badge yes';
+      document.getElementById('profileResendBtn').style.display = 'none';
+    }else if(currentUser.emailVerified){
+      badge.textContent = 'Verified';
+      badge.className = 'verified-badge yes';
+      document.getElementById('profileResendBtn').style.display = 'none';
+    }else{
+      badge.textContent = 'Not verified';
+      badge.className = 'verified-badge no';
+      document.getElementById('profileResendBtn').style.display = 'inline-block';
+    }
+  }
+  async function saveProfile(){
+    const nameInput = document.getElementById('profileNameInput');
+    const photoInput = document.getElementById('profilePhotoInput');
+    const errorEl = document.getElementById('profileModalError');
+    const name = nameInput.value.trim();
+    const photoURL = photoInput.value.trim();
+    if(!name){ errorEl.textContent = 'Display name can\'t be empty.'; return; }
+    const btn = document.getElementById('profileSaveBtn');
+    btn.disabled = true;
+    errorEl.textContent = '';
+    try{
+      await updateProfile(currentUser, { displayName: name, photoURL: photoURL || null });
+      await setDoc(doc(db, 'users', currentUser.uid), { displayName: name }, { merge: true });
+      document.getElementById('userName').textContent = name;
+      document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
+      closeProfileModal();
+    }catch(err){
+      console.error('Failed to update profile:', err);
+      errorEl.textContent = 'Could not save changes: ' + (err.message || err.code);
+    }finally{
+      btn.disabled = false;
+    }
+  }
+  async function deleteAccount(){
+    if(!confirm('Delete your account? This permanently removes your personal tasks and can\'t be undone.')) return;
+    if(!confirm('Are you absolutely sure? This is your last chance to cancel.')) return;
+    const btn = document.getElementById('deleteAccountBtn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try{
+      const uid = currentUser.uid;
+      // Best-effort cleanup of this user's own data before removing the auth account.
+      const ownTasksSnap = await getDocs(query(tasksCol, where('userId', '==', uid)));
+      const personalTasks = ownTasksSnap.docs.filter(d => {
+        const data = d.data();
+        return !data.listId || data.listId === uid;
+      });
+      for(let i = 0; i < personalTasks.length; i += 400){
+        const batch = writeBatch(db);
+        personalTasks.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+      const ownedLists = myLists.filter(l => l.ownerId === uid);
+      const memberLists = myLists.filter(l => l.ownerId !== uid);
+      for(const l of ownedLists){ await deleteDoc(doc(db, 'lists', l.id)).catch(() => {}); }
+      for(const l of memberLists){
+        await updateDoc(doc(db, 'lists', l.id), {
+          memberUids: arrayRemove(uid),
+          memberEmails: arrayRemove(currentUser.email)
+        }).catch(() => {});
+      }
+      await deleteDoc(doc(db, 'users', uid)).catch(() => {});
+      await deleteUser(currentUser);
+      // onAuthStateChanged handles returning to the auth screen.
+    }catch(err){
+      console.error('Account deletion failed:', err);
+      if(err.code === 'auth/requires-recent-login'){
+        alert('For security, please log out and log back in, then try deleting your account again.');
+      }else{
+        alert('Could not delete account: ' + (err.message || err.code));
+      }
+    }finally{
+      btn.disabled = false;
+      btn.textContent = 'Delete my account';
+    }
+  }
+
   function subscribeToLists(){
     if(unsubscribeLists) unsubscribeLists();
     const q = query(listsCol, where('memberUids', 'array-contains', currentUser.uid));
@@ -842,6 +1154,7 @@
     currentListId = value === '__personal__' ? currentUser.uid : value;
     clearSelection();
     expandedTasks.clear();
+    pageSize = 50;
     document.getElementById('shareListBtn').classList.toggle('hidden', value === '__personal__');
     renderAssigneeOptions();
     subscribeToTasks();
@@ -979,9 +1292,11 @@
     // before shared lists existed (no listId field) still show up; shared-list
     // tasks the same user authored are filtered out client-side below.
     // Shared view: query the list's tasks directly so every member sees them.
+    // orderBy + limit keeps reads (and render cost) bounded as task counts grow —
+    // "Load more" below just raises the limit and re-subscribes.
     const q = isPersonal
-      ? query(tasksCol, where('userId', '==', currentUser.uid))
-      : query(tasksCol, where('listId', '==', currentListId));
+      ? query(tasksCol, where('userId', '==', currentUser.uid), orderBy('order'), limit(pageSize))
+      : query(tasksCol, where('listId', '==', currentListId), orderBy('order'), limit(pageSize));
     // includeMetadataChanges:true lets us render local (pending) writes instantly —
     // this is what gives add/toggle/delete their "optimistic" feel — and then
     // re-render silently once the server confirms.
@@ -989,12 +1304,24 @@
       let tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if(isPersonal) tasks = tasks.filter(t => !t.listId || t.listId === currentUser.uid);
       tasksCache = tasks;
+      lastSnapCount = snap.docs.length;
       renderTasks();
+      const loadMoreRow = document.getElementById('loadMoreRow');
+      loadMoreRow.classList.toggle('hidden', lastSnapCount < pageSize);
     }, (err) => {
       console.error('Task sync error:', err);
       const list = document.getElementById('taskList');
       list.innerHTML = `<div class="empty-state">Couldn't load tasks: ${escapeHtml(err.message || err.code || 'unknown error')}</div>`;
     });
+  }
+
+  function loadMoreTasks(){
+    pageSize += 50;
+    const btn = document.getElementById('loadMoreBtn');
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+    subscribeToTasks();
+    setTimeout(() => { btn.textContent = 'Load more tasks'; btn.disabled = false; }, 600);
   }
 
   function getTask(id){
