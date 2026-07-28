@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="TaskFlow — a simple task manager to organize your day.">
 <title>TaskFlow — Task Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#0B0F19; --surface:#121828; --surface-2:#1A2136; --border:#262E45;
@@ -18,26 +18,117 @@
   .hidden{display:none !important}
 
   /* ---- Auth screens ---- */
-  #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-  .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;width:100%;max-width:380px}
-  .auth-logo{font-weight:700;font-size:1.3rem;margin-bottom:6px}
-  .auth-logo span{color:var(--spark)}
-  .auth-card p.sub{color:var(--muted);font-size:.88rem;margin-bottom:24px}
-  label{font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px;margin-top:14px}
-  input{
-    width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
-    padding:11px 12px;color:var(--text);font-size:.92rem;font-family:'Inter',sans-serif;
+  #authScreen{
+    --paper:#EDE7D8; --paper-ink:#1E1B14; --paper-muted:#7A7361;
+    --brass:#C89B4A; --brass-dark:#8F6A2E; --sage:#6FA98A; --ruby:#C1495A;
+    --a-ink:#0A0E13; --a-surface:#131A24; --a-surface-2:#1B2432; --a-line:#28324582;
+    --a-text:#E8ECF4; --a-muted:#8A93A6;
+    min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
   }
-  input:focus{outline:2px solid var(--spark);border-color:transparent}
+  .brand-panel{
+    background:var(--paper);color:var(--paper-ink);padding:56px 48px;
+    display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;
+  }
+  .brand-panel::before{
+    content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:linear-gradient(var(--paper-ink) 1px, transparent 1px);
+    background-size:100% 32px;mask-image:linear-gradient(to bottom, transparent, black 8%, black 85%, transparent);
+    opacity:.045;
+  }
+  .brand-mark{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;letter-spacing:-.01em;position:relative;z-index:1}
+  .brand-mark span{color:var(--brass-dark)}
+  .brand-hero{position:relative;z-index:1}
+  .brand-hero h1{
+    font-family:'Fraunces',serif;font-weight:600;font-size:2.5rem;line-height:1.12;
+    letter-spacing:-.015em;margin-bottom:14px;max-width:9.5em;
+  }
+  .brand-hero p{color:var(--paper-muted);font-size:.95rem;max-width:30em;line-height:1.5}
+
+  /* Signature element: the ledger — a small animated task list that ticks itself off */
+  .ledger{
+    position:relative;z-index:1;background:rgba(255,255,255,.35);border:1px solid rgba(30,27,20,.12);
+    border-radius:10px;padding:18px 20px;margin-top:28px;max-width:340px;
+  }
+  .ledger-head{
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--paper-muted);
+    text-transform:uppercase;letter-spacing:.06em;
+  }
+  .ledger-count{font-weight:600;color:var(--paper-ink)}
+  .ledger-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:.88rem}
+  .ledger-check{
+    width:16px;height:16px;border-radius:4px;border:1.5px solid rgba(30,27,20,.3);flex-shrink:0;
+    transition:background .3s ease, border-color .3s ease;
+  }
+  .ledger-row.done .ledger-check{background:var(--sage);border-color:var(--sage)}
+  .ledger-row .ledger-label{transition:opacity .3s ease, text-decoration-color .3s ease}
+  .ledger-row.done .ledger-label{opacity:.55;text-decoration:line-through}
+  .ledger-time{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--paper-muted)}
+  .brand-quote{position:relative;z-index:1;font-size:.82rem;color:var(--paper-muted);border-top:1px solid rgba(30,27,20,.12);padding-top:16px;margin-top:36px}
+
+  .form-panel{background:var(--a-ink);color:var(--a-text);display:flex;align-items:center;justify-content:center;padding:32px 20px}
+  .auth-card{width:100%;max-width:380px}
+  .auth-logo-mobile{display:none;font-family:'Fraunces',serif;font-weight:600;font-size:1.3rem;margin-bottom:22px}
+  .auth-logo-mobile span{color:var(--brass)}
+  .auth-card h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin-bottom:6px}
+  .auth-card p.sub{color:var(--a-muted);font-size:.88rem;margin-bottom:26px}
+
+  .google-btn{
+    width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+    background:var(--a-surface);border:1px solid var(--a-line);color:var(--a-text);
+    padding:11px;border-radius:8px;font-size:.88rem;font-weight:600;cursor:pointer;
+    font-family:'Inter',sans-serif;transition:border-color .15s ease, background .15s ease;
+  }
+  .google-btn:hover{border-color:#3A455E;background:var(--a-surface-2)}
+  .google-btn:disabled{opacity:.6;cursor:default}
+  .divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--a-muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.05em}
+  .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--a-line)}
+
+  #authScreen label{font-size:.8rem;color:var(--a-muted);display:block;margin-bottom:6px;margin-top:14px}
+  #authScreen input[type="text"],#authScreen input[type="email"],#authScreen input[type="password"]{
+    width:100%;background:var(--a-surface);border:1px solid var(--a-line);border-radius:8px;
+    padding:11px 12px;color:var(--a-text);font-size:.92rem;font-family:'Inter',sans-serif;
+  }
+  #authScreen input:focus{outline:2px solid var(--brass);border-color:transparent}
+  .field-password{position:relative}
+  .field-password input{padding-right:42px}
+  .toggle-visibility{
+    position:absolute;right:8px;top:50%;transform:translateY(0);background:none;border:none;
+    color:var(--a-muted);cursor:pointer;font-size:.78rem;padding:6px;font-family:'Inter',sans-serif;font-weight:600;
+  }
+  .toggle-visibility:hover{color:var(--a-text)}
+
+  .strength-meter{margin-top:8px}
+  .strength-track{height:4px;border-radius:3px;background:var(--a-surface-2);overflow:hidden}
+  .strength-fill{height:100%;width:0%;border-radius:3px;transition:width .25s ease, background .25s ease}
+  .strength-label{font-size:.74rem;color:var(--a-muted);margin-top:5px;min-height:14px}
+
+  .remember-row{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
+  .remember-check{display:flex;align-items:center;gap:8px;font-size:.83rem;color:var(--a-muted);cursor:pointer;user-select:none}
+  .remember-check input{width:15px;height:15px;accent-color:var(--brass);cursor:pointer}
+
   .btn{
     width:100%;padding:12px;border-radius:8px;font-weight:600;font-size:.92rem;
-    margin-top:20px;cursor:pointer;border:none;transition:transform .15s ease;
+    margin-top:20px;cursor:pointer;border:none;transition:transform .15s ease, opacity .15s ease;
+    font-family:'Inter',sans-serif;
   }
   .btn:hover{transform:translateY(-1px)}
-  .btn-primary{background:var(--spark);color:#1A1200}
-  .switch-link{margin-top:18px;text-align:center;font-size:.85rem;color:var(--muted)}
-  .switch-link a{color:var(--blue);cursor:pointer;font-weight:600}
-  .error-msg{color:var(--danger);font-size:.82rem;margin-top:12px;min-height:16px}
+  .btn:disabled{opacity:.65;cursor:default;transform:none}
+  .btn-primary{background:var(--brass);color:#1A1200}
+  .switch-link{margin-top:18px;text-align:center;font-size:.85rem;color:var(--a-muted)}
+  .switch-link a{color:#8FB4EE;cursor:pointer;font-weight:600}
+  .error-msg{color:var(--ruby);font-size:.82rem;margin-top:12px;min-height:16px}
+
+  @media (max-width: 860px){
+    #authScreen{grid-template-columns:1fr}
+    .brand-panel{padding:28px 24px 22px;min-height:auto}
+    .brand-hero h1{font-size:1.5rem;max-width:none}
+    .brand-hero p{display:none}
+    .ledger{display:none}
+    .brand-quote{display:none}
+    .auth-logo-mobile{display:block}
+    .form-panel{padding:28px 20px 48px}
+  }
 
   /* ---- Dashboard ---- */
   #dashboard{max-width:800px;margin:0 auto;padding:32px 20px}
@@ -123,33 +214,80 @@
 
 <!-- AUTH -->
 <div id="authScreen">
-  <div class="auth-card">
-    <div class="auth-logo">Task<span>Flow</span></div>
-    <p class="sub" id="authSub">Sign in to manage your tasks.</p>
+  <div class="brand-panel">
+    <div class="brand-mark">Task<span>Flow</span></div>
 
-    <form id="loginForm">
-      <label>Email</label>
-      <input type="email" id="loginEmail" required>
-      <label>Password</label>
-      <input type="password" id="loginPassword" required>
-      <button type="submit" class="btn btn-primary">Sign In</button>
-      <div class="error-msg" id="loginError"></div>
-      <div class="switch-link"><a onclick="handleForgotPassword()">Forgot password?</a></div>
-    </form>
+    <div class="brand-hero">
+      <h1>Where your day gets checked off.</h1>
+      <p>A quiet, disciplined way to keep track of what matters — sorted, sorted again, and finished.</p>
 
-    <form id="registerForm" class="hidden">
-      <label>Name</label>
-      <input type="text" id="regName" required>
-      <label>Email</label>
-      <input type="email" id="regEmail" required>
-      <label>Password (6+ characters)</label>
-      <input type="password" id="regPassword" required minlength="6">
-      <button type="submit" class="btn btn-primary">Create Account</button>
-      <div class="error-msg" id="regError"></div>
-    </form>
+      <div class="ledger">
+        <div class="ledger-head"><span>Today's ledger</span><span class="ledger-count" id="ledgerCount">0/3</span></div>
+        <div id="ledgerRows">
+          <div class="ledger-row" data-row="0"><div class="ledger-check"></div><div class="ledger-label">Draft proposal</div><div class="ledger-time">09:14</div></div>
+          <div class="ledger-row" data-row="1"><div class="ledger-check"></div><div class="ledger-label">Review PR #142</div><div class="ledger-time">10:02</div></div>
+          <div class="ledger-row" data-row="2"><div class="ledger-check"></div><div class="ledger-label">Ship v1.2</div><div class="ledger-time">11:47</div></div>
+        </div>
+      </div>
+    </div>
 
-    <div class="switch-link" id="switchToRegister">Don't have an account? <a onclick="showRegister()">Sign up</a></div>
-    <div class="switch-link hidden" id="switchToLogin">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+    <div class="brand-quote">Built for people who'd rather finish the list than manage the app.</div>
+  </div>
+
+  <div class="form-panel">
+    <div class="auth-card">
+      <div class="auth-logo-mobile">Task<span>Flow</span></div>
+      <h2 id="authHeading">Welcome back</h2>
+      <p class="sub" id="authSub">Sign in to manage your tasks.</p>
+
+      <button type="button" class="google-btn" id="googleBtn" onclick="handleGoogleSignIn()">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+          <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.91c1.7-1.57 2.69-3.88 2.69-6.64z"/>
+          <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.17l-2.91-2.27c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/>
+          <path fill="#FBBC05" d="M3.95 10.71A5.4 5.4 0 0 1 3.65 9c0-.59.1-1.17.3-1.71V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l2.99-2.34z"/>
+          <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.95l2.99 2.34C4.66 5.16 6.65 3.58 9 3.58z"/>
+        </svg>
+        Continue with Google
+      </button>
+      <div class="divider">or</div>
+
+      <form id="loginForm">
+        <label>Email</label>
+        <input type="email" id="loginEmail" required>
+        <label>Password</label>
+        <div class="field-password">
+          <input type="password" id="loginPassword" required>
+          <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('loginPassword', this)">Show</button>
+        </div>
+        <div class="remember-row">
+          <label class="remember-check"><input type="checkbox" id="rememberMe"> Remember me</label>
+          <a onclick="handleForgotPassword()" style="color:#8FB4EE;cursor:pointer;font-size:.83rem;font-weight:600">Forgot password?</a>
+        </div>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+        <div class="error-msg" id="loginError"></div>
+      </form>
+
+      <form id="registerForm" class="hidden">
+        <label>Name</label>
+        <input type="text" id="regName" required>
+        <label>Email</label>
+        <input type="email" id="regEmail" required>
+        <label>Password (6+ characters)</label>
+        <div class="field-password">
+          <input type="password" id="regPassword" required minlength="6">
+          <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('regPassword', this)">Show</button>
+        </div>
+        <div class="strength-meter">
+          <div class="strength-track"><div class="strength-fill" id="strengthFill"></div></div>
+          <div class="strength-label" id="strengthLabel"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Account</button>
+        <div class="error-msg" id="regError"></div>
+      </form>
+
+      <div class="switch-link" id="switchToRegister">Don't have an account? <a onclick="showRegister()">Sign up</a></div>
+      <div class="switch-link hidden" id="switchToLogin">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+    </div>
   </div>
 </div>
 
@@ -216,7 +354,9 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
   import {
     getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-    signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail
+    signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail,
+    GoogleAuthProvider, signInWithPopup, setPersistence,
+    browserLocalPersistence, browserSessionPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
@@ -259,6 +399,8 @@
   window.saveEditTask = saveEditTask;
   window.cancelEditTask = cancelEditTask;
   window.handleForgotPassword = handleForgotPassword;
+  window.togglePasswordVisibility = togglePasswordVisibility;
+  window.handleGoogleSignIn = handleGoogleSignIn;
   window.dragTaskStart = dragTaskStart;
   window.dragTaskOver = dragTaskOver;
   window.dragTaskLeave = dragTaskLeave;
@@ -270,6 +412,7 @@
     document.getElementById('registerForm').classList.remove('hidden');
     document.getElementById('switchToRegister').classList.add('hidden');
     document.getElementById('switchToLogin').classList.remove('hidden');
+    document.getElementById('authHeading').textContent = 'Create your account';
     document.getElementById('authSub').textContent = 'Create an account to get started.';
   }
   function showLogin(){
@@ -277,7 +420,70 @@
     document.getElementById('loginForm').classList.remove('hidden');
     document.getElementById('switchToLogin').classList.add('hidden');
     document.getElementById('switchToRegister').classList.remove('hidden');
+    document.getElementById('authHeading').textContent = 'Welcome back';
     document.getElementById('authSub').textContent = 'Sign in to manage your tasks.';
+  }
+
+  function togglePasswordVisibility(inputId, btn){
+    const input = document.getElementById(inputId);
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    btn.textContent = showing ? 'Show' : 'Hide';
+  }
+
+  function scorePasswordStrength(pw){
+    if(!pw) return 0;
+    let score = 0;
+    if(pw.length >= 6) score++;
+    if(pw.length >= 10) score++;
+    if(/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+    if(/\d/.test(pw)) score++;
+    if(/[^A-Za-z0-9]/.test(pw)) score++;
+    return Math.min(score, 4);
+  }
+
+  document.getElementById('regPassword').addEventListener('input', (e) => {
+    const fill = document.getElementById('strengthFill');
+    const label = document.getElementById('strengthLabel');
+    const pw = e.target.value;
+    if(!pw){
+      fill.style.width = '0%';
+      label.textContent = '';
+      return;
+    }
+    const score = scorePasswordStrength(pw);
+    const levels = [
+      { pct: '20%', color: 'var(--ruby)', text: 'Too weak' },
+      { pct: '40%', color: 'var(--ruby)', text: 'Weak' },
+      { pct: '65%', color: 'var(--brass)', text: 'Fair' },
+      { pct: '85%', color: 'var(--sage)', text: 'Good' },
+      { pct: '100%', color: 'var(--sage)', text: 'Strong' }
+    ];
+    const level = levels[score];
+    fill.style.width = level.pct;
+    fill.style.background = level.color;
+    label.textContent = level.text;
+  });
+
+  async function handleGoogleSignIn(){
+    const btn = document.getElementById('googleBtn');
+    btn.disabled = true;
+    const originalText = btn.innerHTML;
+    try{
+      await setPersistence(auth, browserLocalPersistence);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      // onAuthStateChanged below handles entering the dashboard
+    }catch(err){
+      if(err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request'){
+        const loginVisible = !document.getElementById('loginForm').classList.contains('hidden');
+        const errEl = document.getElementById(loginVisible ? 'loginError' : 'regError');
+        errEl.textContent = friendlyAuthError(err);
+      }
+    }finally{
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   }
 
   function setBtnLoading(form, loading, loadingText, normalText){
@@ -299,8 +505,10 @@
       return;
     }
 
+    const rememberMe = document.getElementById('rememberMe').checked;
     setBtnLoading(form, true, 'Signing in…', 'Sign In');
     try{
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged below handles entering the dashboard
     }catch(err){
@@ -365,7 +573,9 @@
       'auth/invalid-credential': 'Incorrect email or password.',
       'auth/user-not-found': 'Incorrect email or password.',
       'auth/wrong-password': 'Incorrect email or password.',
-      'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.'
+      'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
+      'auth/popup-blocked': 'Your browser blocked the sign-in popup. Please allow popups and try again.',
+      'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method.'
     };
     const friendly = map[err.code] || 'Something went wrong.';
     return `${friendly} (${err.code || err.message})`;
@@ -718,6 +928,25 @@
     currentSort = e.target.value;
     renderTasks();
   });
+
+  // ---- Brand panel signature animation: the ledger ticks itself off in a loop ----
+  (function runLedgerAnimation(){
+    const rows = Array.from(document.querySelectorAll('.ledger-row'));
+    const countEl = document.getElementById('ledgerCount');
+    if(rows.length === 0) return;
+    let step = 0;
+    const total = rows.length;
+
+    function tick(){
+      const doneCount = step % (total + 1);
+      rows.forEach((row, i) => row.classList.toggle('done', i < doneCount));
+      countEl.textContent = `${doneCount}/${total}`;
+      step++;
+      const delay = doneCount === total ? 1600 : (doneCount === 0 ? 500 : 900);
+      setTimeout(tick, delay);
+    }
+    tick();
+  })();
 </script>
 </body>
 </html>
