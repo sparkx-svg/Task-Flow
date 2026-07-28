@@ -54,10 +54,20 @@
   .stat b{font-size:1.5rem;display:block;color:var(--spark)}
   .stat span{font-size:.78rem;color:var(--muted)}
 
-  .add-task-row{display:flex;gap:8px;margin-bottom:22px}
-  .add-task-row input{flex:1}
+  .add-task-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .add-task-row input[type="text"]{flex:1;min-width:140px}
+  .add-task-row input[type="date"]{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0 10px;font-size:.85rem;font-family:'Inter',sans-serif;color-scheme:dark;width:150px}
   .add-task-row select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0 10px;font-size:.85rem}
   .add-task-row button{background:var(--spark);color:#1A1200;border:none;border-radius:8px;padding:0 20px;font-weight:600;cursor:pointer;white-space:nowrap}
+
+  .filter-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .filter-row input, .filter-row select{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:8px 10px;font-size:.83rem;font-family:'Inter',sans-serif;
+  }
+  .filter-row input{flex:1;min-width:140px}
+  .filter-row select{min-width:0}
+  .drag-hint{font-size:.76rem;color:var(--muted);margin-bottom:14px;min-height:14px}
 
   .task-list{display:flex;flex-direction:column;gap:8px}
   .task-item{
@@ -73,6 +83,12 @@
   .priority-high{background:rgba(239,74,92,.15);color:var(--danger)}
   .priority-medium{background:rgba(255,176,32,.15);color:var(--spark)}
   .priority-low{background:rgba(91,141,239,.15);color:var(--blue)}
+  .due-tag{font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+  .due-tag.overdue{background:rgba(239,74,92,.15);color:var(--danger)}
+  .task-item[draggable="true"]{cursor:grab}
+  .task-item.dragging{opacity:.4}
+  .task-item.drag-over{border-color:var(--blue)}
+  .drag-handle{color:var(--muted);cursor:grab;font-size:.9rem;flex-shrink:0}
   .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px}
   .del-btn:hover{color:var(--danger)}
   .edit-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:4px}
@@ -156,6 +172,7 @@
 
   <div class="add-task-row">
     <input type="text" id="newTaskTitle" placeholder="Add a new task...">
+    <input type="date" id="newTaskDueDate" title="Due date (optional)">
     <select id="newTaskPriority">
       <option value="low">Low</option>
       <option value="medium" selected>Medium</option>
@@ -163,6 +180,28 @@
     </select>
     <button onclick="addTask()">Add</button>
   </div>
+
+  <div class="filter-row">
+    <input type="text" id="searchInput" placeholder="Search tasks...">
+    <select id="filterStatus">
+      <option value="all">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="done">Completed</option>
+    </select>
+    <select id="filterPriority">
+      <option value="all">All priorities</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <select id="sortSelect">
+      <option value="custom">Custom order</option>
+      <option value="newest">Newest first</option>
+      <option value="dueDate">Due date</option>
+      <option value="priority">Priority</option>
+    </select>
+  </div>
+  <div class="drag-hint" id="dragHint"></div>
 
   <div class="task-list" id="taskList"></div>
 </div>
@@ -181,7 +220,7 @@
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
-    doc, query, where, onSnapshot
+    doc, query, where, onSnapshot, writeBatch
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -204,6 +243,11 @@
   let unsubscribeTasks = null;
   let editingTaskId = null;
   let tasksCache = [];
+  let currentSort = 'custom';
+  let filterStatusVal = 'all';
+  let filterPriorityVal = 'all';
+  let searchQueryVal = '';
+  let draggedTaskId = null;
 
   window.showRegister = showRegister;
   window.showLogin = showLogin;
@@ -215,6 +259,11 @@
   window.saveEditTask = saveEditTask;
   window.cancelEditTask = cancelEditTask;
   window.handleForgotPassword = handleForgotPassword;
+  window.dragTaskStart = dragTaskStart;
+  window.dragTaskOver = dragTaskOver;
+  window.dragTaskLeave = dragTaskLeave;
+  window.dragTaskDrop = dragTaskDrop;
+  window.dragTaskEnd = dragTaskEnd;
 
   function showRegister(){
     document.getElementById('loginForm').classList.add('hidden');
@@ -362,9 +411,8 @@
     // re-render silently once the server confirms.
     unsubscribeTasks = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
       const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      tasks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       tasksCache = tasks;
-      renderTasks(tasks);
+      renderTasks();
     }, (err) => {
       console.error('Task sync error:', err);
       const list = document.getElementById('taskList');
@@ -372,22 +420,94 @@
     });
   }
 
-  function renderTasks(tasks){
-    const list = document.getElementById('taskList');
-    document.getElementById('statTotal').textContent = tasks.length;
-    document.getElementById('statDone').textContent = tasks.filter(t=>t.status==='done').length;
-    document.getElementById('statPending').textContent = tasks.filter(t=>t.status!=='done').length;
+  function filterTasks(tasks){
+    return tasks.filter(t => {
+      if(filterStatusVal === 'pending' && t.status === 'done') return false;
+      if(filterStatusVal === 'done' && t.status !== 'done') return false;
+      if(filterPriorityVal !== 'all' && t.priority !== filterPriorityVal) return false;
+      if(searchQueryVal && !t.title.toLowerCase().includes(searchQueryVal.toLowerCase())) return false;
+      return true;
+    });
+  }
 
-    if(tasks.length === 0){
+  function sortTasks(tasks){
+    const arr = [...tasks];
+    if(currentSort === 'dueDate'){
+      arr.sort((a, b) => {
+        if(!a.dueDate && !b.dueDate) return 0;
+        if(!a.dueDate) return 1;
+        if(!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+    }else if(currentSort === 'priority'){
+      const rank = { high: 0, medium: 1, low: 2 };
+      arr.sort((a, b) => rank[a.priority] - rank[b.priority]);
+    }else if(currentSort === 'newest'){
+      arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }else{ // custom
+      arr.sort((a, b) => (a.order ?? a.createdAt ?? 0) - (b.order ?? b.createdAt ?? 0));
+    }
+    return arr;
+  }
+
+  function isDragEnabled(){
+    return currentSort === 'custom' && filterStatusVal === 'all' && filterPriorityVal === 'all' && !searchQueryVal;
+  }
+
+  function updateDragHint(){
+    const hint = document.getElementById('dragHint');
+    if(currentSort !== 'custom'){
+      hint.textContent = `Switch sort to "Custom order" to drag-and-drop tasks.`;
+    }else if(!isDragEnabled()){
+      hint.textContent = `Clear search/filters to drag-and-drop tasks.`;
+    }else{
+      hint.textContent = `Drag tasks by the ⠿ handle to reorder.`;
+    }
+  }
+
+  function formatDueDate(dueDate){
+    // dueDate is 'YYYY-MM-DD'; build a local Date to avoid timezone shift
+    const [y, m, d] = dueDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function isOverdue(t){
+    if(!t.dueDate || t.status === 'done') return false;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    return t.dueDate < todayStr;
+  }
+
+  function renderTasks(){
+    updateDragHint();
+    const list = document.getElementById('taskList');
+    document.getElementById('statTotal').textContent = tasksCache.length;
+    document.getElementById('statDone').textContent = tasksCache.filter(t=>t.status==='done').length;
+    document.getElementById('statPending').textContent = tasksCache.filter(t=>t.status!=='done').length;
+
+    const tasks = sortTasks(filterTasks(tasksCache));
+    const dragOn = isDragEnabled();
+
+    if(tasksCache.length === 0){
       list.innerHTML = '<div class="empty-state">No tasks yet — add one above to get started.</div>';
       return;
     }
+    if(tasks.length === 0){
+      list.innerHTML = '<div class="empty-state">No tasks match your filters.</div>';
+      return;
+    }
     list.innerHTML = tasks.map(t => {
+      const dueTag = t.dueDate
+        ? `<div class="due-tag ${isOverdue(t)?'overdue':''}">${isOverdue(t)?'Overdue ':'Due '}${formatDueDate(t.dueDate)}</div>`
+        : '';
+
       if(t.id === editingTaskId){
         return `
       <div class="task-item">
         <div class="task-check ${t.status==='done'?'checked':''}" role="checkbox" aria-checked="${t.status==='done'}" tabindex="0" onclick="toggleTask('${t.id}', '${t.status}')"></div>
         <input class="edit-title-input" id="editInput-${t.id}" value="${escapeHtml(t.title)}" />
+        <input type="date" class="edit-priority-select" id="editDueDate-${t.id}" value="${t.dueDate || ''}" />
         <select class="edit-priority-select" id="editPriority-${t.id}">
           <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
           <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
@@ -398,9 +518,12 @@
       </div>`;
       }
       return `
-      <div class="task-item ${t.status==='done'?'done':''}">
+      <div class="task-item ${t.status==='done'?'done':''}" id="task-${t.id}"
+           ${dragOn ? `draggable="true" ondragstart="dragTaskStart(event,'${t.id}')" ondragover="dragTaskOver(event,'${t.id}')" ondragleave="dragTaskLeave(event,'${t.id}')" ondrop="dragTaskDrop(event,'${t.id}')" ondragend="dragTaskEnd(event)"` : ''}>
+        ${dragOn ? '<span class="drag-handle">⠿</span>' : ''}
         <div class="task-check ${t.status==='done'?'checked':''}" role="checkbox" aria-checked="${t.status==='done'}" tabindex="0" onclick="toggleTask('${t.id}', '${t.status}')"></div>
         <div class="task-title">${escapeHtml(t.title)}</div>
+        ${dueTag}
         <div class="priority-tag priority-${t.priority}">${t.priority}</div>
         <button class="edit-btn" onclick="startEditTask('${t.id}')" aria-label="Edit task">✎</button>
         <button class="del-btn" onclick="deleteTask('${t.id}')" aria-label="Delete task">✕</button>
@@ -420,19 +543,75 @@
     }
   }
 
+  function dragTaskStart(e, id){
+    draggedTaskId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.closest('.task-item').classList.add('dragging');
+  }
+
+  function dragTaskOver(e, id){
+    e.preventDefault();
+    if(id === draggedTaskId) return;
+    e.currentTarget.classList.add('drag-over');
+  }
+
+  function dragTaskLeave(e, id){
+    e.currentTarget.classList.remove('drag-over');
+  }
+
+  async function dragTaskDrop(e, targetId){
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    if(!draggedTaskId || draggedTaskId === targetId) return;
+
+    const visible = sortTasks(filterTasks(tasksCache));
+    const fromIdx = visible.findIndex(t => t.id === draggedTaskId);
+    const toIdx = visible.findIndex(t => t.id === targetId);
+    if(fromIdx === -1 || toIdx === -1) return;
+
+    const reordered = [...visible];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    reordered.forEach((t, i) => { t.order = i; });
+
+    // Optimistic: update local cache immediately, then persist
+    tasksCache = tasksCache.map(t => {
+      const updated = reordered.find(r => r.id === t.id);
+      return updated ? { ...t, order: updated.order } : t;
+    });
+    draggedTaskId = null;
+    renderTasks();
+
+    try{
+      const batch = writeBatch(db);
+      reordered.forEach(t => batch.update(doc(db, 'tasks', t.id), { order: t.order }));
+      await batch.commit();
+    }catch(err){
+      console.error('Failed to save order:', err);
+      alert('Could not save the new order: ' + (err.message || err.code));
+    }
+  }
+
+  function dragTaskEnd(e){
+    document.querySelectorAll('.task-item.dragging').forEach(el => el.classList.remove('dragging'));
+    document.querySelectorAll('.task-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    draggedTaskId = null;
+  }
+
   function startEditTask(id){
     editingTaskId = id;
-    renderTasks(tasksCache);
+    renderTasks();
   }
 
   function cancelEditTask(){
     editingTaskId = null;
-    renderTasks(tasksCache);
+    renderTasks();
   }
 
   async function saveEditTask(id){
     const input = document.getElementById(`editInput-${id}`);
     const prioritySelect = document.getElementById(`editPriority-${id}`);
+    const dueDateInput = document.getElementById(`editDueDate-${id}`);
     const title = input.value.trim();
     if(!title){
       input.classList.add('input-error');
@@ -441,7 +620,11 @@
     }
     editingTaskId = null;
     try{
-      await updateDoc(doc(db, 'tasks', id), { title, priority: prioritySelect.value });
+      await updateDoc(doc(db, 'tasks', id), {
+        title,
+        priority: prioritySelect.value,
+        dueDate: dueDateInput.value || null
+      });
     }catch(err){
       console.error('Failed to save edit:', err);
       alert('Could not save changes: ' + (err.message || err.code));
@@ -467,6 +650,9 @@
       return;
     }
     const priority = document.getElementById('newTaskPriority').value;
+    const dueDateInput = document.getElementById('newTaskDueDate');
+    const dueDate = dueDateInput.value || null;
+    const maxOrder = tasksCache.reduce((max, t) => Math.max(max, t.order ?? -1), -1);
     addingTask = true;
     try{
       // No manual reload needed — onSnapshot's local-cache write reflects
@@ -475,10 +661,13 @@
         userId: currentUser.uid,
         title,
         priority,
+        dueDate,
         status: 'pending',
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        order: maxOrder + 1
       });
       titleInput.value = '';
+      dueDateInput.value = '';
     }catch(err){
       console.error('Failed to add task:', err);
       alert('Could not add task: ' + (err.message || err.code));
@@ -508,6 +697,26 @@
 
   document.getElementById('newTaskTitle').addEventListener('keypress', (e) => {
     if(e.key === 'Enter') addTask();
+  });
+
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQueryVal = e.target.value.trim();
+    renderTasks();
+  });
+
+  document.getElementById('filterStatus').addEventListener('change', (e) => {
+    filterStatusVal = e.target.value;
+    renderTasks();
+  });
+
+  document.getElementById('filterPriority').addEventListener('change', (e) => {
+    filterPriorityVal = e.target.value;
+    renderTasks();
+  });
+
+  document.getElementById('sortSelect').addEventListener('change', (e) => {
+    currentSort = e.target.value;
+    renderTasks();
   });
 </script>
 </body>
