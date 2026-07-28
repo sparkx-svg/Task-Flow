@@ -14,6 +14,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="TaskFlow — a simple task manager to organize your day.">
 <title>TaskFlow — Task Manager</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B0F19">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TaskFlow">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -195,6 +202,18 @@
   .task-item[draggable="true"]{cursor:grab}
   .task-item.dragging{opacity:.4}
   .task-item.drag-over{border-color:var(--blue)}
+  .task-item.kb-focus{outline:2px solid var(--blue);outline-offset:-1px}
+
+  /* ---- Presence bar (who's viewing / typing on a shared list) ---- */
+  .presence-bar{display:flex;align-items:center;gap:6px;margin:-6px 0 14px 2px;min-height:22px;font-size:.78rem;color:var(--muted)}
+  .presence-bar:empty{display:none}
+  .presence-avatars{display:flex}
+  .presence-avatar{
+    width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;font-size:.65rem;font-weight:700;
+    display:flex;align-items:center;justify-content:center;border:2px solid var(--bg);margin-left:-6px;
+  }
+  .presence-avatar:first-child{margin-left:0}
+  .presence-typing{font-style:italic}
   .drag-handle{color:var(--muted);cursor:grab;font-size:.9rem;flex-shrink:0}
   .select-check{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
   .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px}
@@ -427,6 +446,8 @@
     <div class="user-chip">
       <button class="icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle light/dark theme">◐</button>
       <button class="icon-btn" id="densityToggleBtn" onclick="toggleDensity()" title="Toggle compact/comfortable spacing">☰</button>
+      <button class="icon-btn" id="reminderToggleBtn" onclick="toggleReminders()" title="Enable due-date reminders">🔔</button>
+      <button class="icon-btn hidden" id="installBtn" onclick="installApp()" title="Install TaskFlow as an app">⤓</button>
       <div class="avatar" id="userAvatar" onclick="openProfileModal()" style="cursor:pointer" title="Account settings">?</div>
       <span id="userName"></span>
       <button class="logout-btn" onclick="logout()">Log out</button>
@@ -461,6 +482,8 @@
     </div>
   </div>
 
+  <div class="presence-bar" id="presenceBar"></div>
+
   <div class="add-task-row">
     <input type="text" id="newTaskTitle" placeholder="Add a new task...">
     <input type="text" id="newTaskTags" placeholder="Tags (comma separated)" style="flex:1;min-width:140px">
@@ -474,6 +497,7 @@
       <option value="">No repeat</option>
       <option value="daily">Repeat daily</option>
       <option value="weekly">Repeat weekly</option>
+      <option value="monthly">Repeat monthly</option>
     </select>
     <select id="newTaskAssignee" class="assignee-select hidden"></select>
     <button onclick="addTask()">Add</button>
@@ -616,7 +640,7 @@
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
     doc, query, where, onSnapshot, writeBatch, setDoc, getDoc,
-    arrayUnion, arrayRemove, serverTimestamp, limit
+    arrayUnion, arrayRemove, serverTimestamp, limit, enableIndexedDbPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -633,9 +657,20 @@
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  // Offline persistence: lets previously-synced tasks load (read-only until reconnect)
+  // even with no network — this is what actually makes the PWA usable offline for data,
+  // separate from the service worker below which only caches the static app shell.
+  enableIndexedDbPersistence(db).catch((err) => {
+    if(err.code === 'failed-precondition'){
+      console.warn('Offline persistence only works in one tab at a time — already open elsewhere.');
+    }else if(err.code === 'unimplemented'){
+      console.warn('This browser does not support offline persistence.');
+    }
+  });
   const tasksCol = collection(db, "tasks");
   const listsCol = collection(db, "lists");
   const usersCol = collection(db, "users");
+  const presenceCol = collection(db, "presence");
 
   let currentUser = null;
   let unsubscribeTasks = null;
@@ -657,6 +692,12 @@
   let lastSnapCount = 0;          // docs returned by the most recent snapshot, to know if more may exist
   let verifyBannerDismissed = false;
   let selectedTaskIds = new Set();
+  let kbFocusIndex = -1; // index into the currently visible/sorted task list, for keyboard navigation
+  let unsubscribePresence = null;
+  let presenceHeartbeatInterval = null;
+  let typingClearTimer = null;
+  const PRESENCE_STALE_MS = 30000;   // treat a presence doc older than this as "offline"
+  const PRESENCE_HEARTBEAT_MS = 15000;
 
   window.showRegister = showRegister;
   window.showLogin = showLogin;
@@ -709,6 +750,8 @@
   window.dismissVerifyBanner = dismissVerifyBanner;
   window.deleteAccount = deleteAccount;
   window.loadMoreTasks = loadMoreTasks;
+  window.toggleReminders = toggleReminders;
+  window.installApp = installApp;
 
   // ---- Theme (light/dark) ----
   function toggleTheme(){
@@ -742,7 +785,86 @@
     applyDensity();
   }
 
-  // ---- Keyboard shortcuts: n = new task, / = focus search ----
+  // ---- Due-date reminders (browser Notification API) ----
+  let remindersInterval = null;
+  let notifiedToday = new Set(); // taskIds already notified this session/day, to avoid repeat spam
+
+  function remindersEnabled(){
+    try{ return localStorage.getItem('taskflow-reminders') === 'on'; }catch(e){ return false; }
+  }
+  function updateReminderBtn(){
+    const btn = document.getElementById('reminderToggleBtn');
+    if(!btn) return;
+    const on = remindersEnabled() && Notification && Notification.permission === 'granted';
+    btn.textContent = on ? '🔔' : '🔕';
+    btn.title = on ? 'Reminders on — click to disable' : 'Enable due-date reminders';
+    btn.style.opacity = on ? '1' : '.6';
+  }
+  async function toggleReminders(){
+    if(!('Notification' in window)){
+      alert('This browser does not support notifications.');
+      return;
+    }
+    if(remindersEnabled()){
+      try{ localStorage.setItem('taskflow-reminders', 'off'); }catch(e){}
+      stopReminderChecks();
+      updateReminderBtn();
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      updateReminderBtn();
+      return;
+    }
+    try{ localStorage.setItem('taskflow-reminders', 'on'); }catch(e){}
+    updateReminderBtn();
+    startReminderChecks();
+  }
+  function startReminderChecks(){
+    if(remindersInterval) return;
+    checkDueReminders();
+    remindersInterval = setInterval(checkDueReminders, 5 * 60 * 1000); // every 5 minutes
+  }
+  function stopReminderChecks(){
+    if(remindersInterval){ clearInterval(remindersInterval); remindersInterval = null; }
+  }
+  function checkDueReminders(){
+    if(!remindersEnabled() || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
+    tasksCache.forEach(t => {
+      if(t.status === 'done' || !t.dueDate) return;
+      if(notifiedToday.has(t.id)) return;
+      const due = t.dueDate <= todayStr; // due today or overdue
+      if(!due) return;
+      notifiedToday.add(t.id);
+      try{
+        new Notification(t.dueDate < todayStr ? 'Overdue task' : 'Due today', {
+          body: t.title,
+          tag: `taskflow-${t.id}`
+        });
+      }catch(e){ /* some browsers restrict Notification outside a service worker context */ }
+    });
+  }
+  // Re-check whenever the reminder toggle button first appears/on load, restoring prior preference.
+  if(remindersEnabled()) startReminderChecks();
+
+  // ---- Keyboard shortcuts ----
+  // n = new task, / = focus search, j/k or ↓/↑ = navigate tasks,
+  // Enter/Space = toggle done, e = edit, Backspace/Delete = delete, Escape = clear focus
+  function getVisibleTasksForKb(){
+    return sortTasks(filterTasks(tasksCache.filter(t => !pendingDeleteTimers.has(t.id))));
+  }
+  function moveKbFocus(delta){
+    const visible = getVisibleTasksForKb();
+    if(visible.length === 0){ kbFocusIndex = -1; return; }
+    kbFocusIndex = Math.max(0, Math.min(visible.length - 1, kbFocusIndex + delta));
+    const el = document.getElementById(`task-${visible[kbFocusIndex].id}`);
+    if(el){
+      document.querySelectorAll('.task-item.kb-focus').forEach(n => n.classList.remove('kb-focus'));
+      el.classList.add('kb-focus');
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }
   document.addEventListener('keydown', (e) => {
     if(document.getElementById('dashboard').classList.contains('hidden')) return; // only while signed in
     const tag = (document.activeElement && document.activeElement.tagName) || '';
@@ -754,9 +876,38 @@
     if(e.key === '/' && !typing){
       e.preventDefault();
       document.getElementById('searchInput').focus();
-    }else if((e.key === 'n' || e.key === 'N') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){
+      return;
+    }
+    if((e.key === 'n' || e.key === 'N') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey){
       e.preventDefault();
       document.getElementById('newTaskTitle').focus();
+      return;
+    }
+    if(typing || editingTaskId) return; // everything below only applies to list navigation, not while typing/editing
+
+    if(e.key === 'j' || e.key === 'ArrowDown'){
+      e.preventDefault();
+      moveKbFocus(1);
+    }else if(e.key === 'k' || e.key === 'ArrowUp'){
+      e.preventDefault();
+      moveKbFocus(-1);
+    }else if(e.key === 'Escape'){
+      kbFocusIndex = -1;
+      document.querySelectorAll('.task-item.kb-focus').forEach(n => n.classList.remove('kb-focus'));
+    }else if(kbFocusIndex >= 0){
+      const visible = getVisibleTasksForKb();
+      const focused = visible[kbFocusIndex];
+      if(!focused) return;
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        toggleTask(focused.id, focused.status);
+      }else if(e.key === 'e' || e.key === 'E'){
+        e.preventDefault();
+        startEditTask(focused.id);
+      }else if(e.key === 'Backspace' || e.key === 'Delete'){
+        e.preventDefault();
+        deleteTask(focused.id);
+      }
     }
   });
 
@@ -953,6 +1104,8 @@
     document.getElementById('dashboard').classList.remove('hidden');
     updateThemeBtn();
     applyDensity();
+    updateReminderBtn();
+    startPresenceHeartbeat();
     const displayName = currentUser.displayName || currentUser.email;
     document.getElementById('userName').textContent = displayName;
     document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
@@ -1012,6 +1165,8 @@
     currentListId = null;
     verifyBannerDismissed = false;
     pageSize = 50;
+    stopReminderChecks();
+    stopPresence();
     await signOut(auth);
   }
 
@@ -1158,6 +1313,73 @@
     document.getElementById('shareListBtn').classList.toggle('hidden', value === '__personal__');
     renderAssigneeOptions();
     subscribeToTasks();
+    subscribeToPresence();
+    writePresence({ typing: false }); // announce arrival on the new list immediately
+  }
+
+  // ---- Presence: "who's viewing" + typing indicator on shared lists ----
+  function presenceDocId(listId, uid){ return `${listId}_${uid}`; }
+
+  async function writePresence(extra){
+    if(!currentUser || !currentListId) return;
+    try{
+      await setDoc(doc(db, 'presence', presenceDocId(currentListId, currentUser.uid)), {
+        listId: currentListId,
+        uid: currentUser.uid,
+        name: currentUser.displayName || currentUser.email || 'Someone',
+        lastActive: Date.now(),
+        ...extra
+      }, { merge: true });
+    }catch(err){
+      // Presence is best-effort — don't surface errors to the user for this.
+      console.warn('Presence update failed:', err);
+    }
+  }
+
+  function startPresenceHeartbeat(){
+    stopPresenceHeartbeat();
+    presenceHeartbeatInterval = setInterval(() => writePresence({}), PRESENCE_HEARTBEAT_MS);
+  }
+  function stopPresenceHeartbeat(){
+    if(presenceHeartbeatInterval){ clearInterval(presenceHeartbeatInterval); presenceHeartbeatInterval = null; }
+  }
+
+  function subscribeToPresence(){
+    if(unsubscribePresence){ unsubscribePresence(); unsubscribePresence = null; }
+    if(!currentListId){ renderPresence([]); return; }
+    const isShared = currentListId !== currentUser.uid;
+    if(!isShared){ renderPresence([]); return; } // presence bar only makes sense on shared lists
+    const q = query(presenceCol, where('listId', '==', currentListId));
+    unsubscribePresence = onSnapshot(q, (snap) => {
+      const now = Date.now();
+      const others = snap.docs
+        .map(d => d.data())
+        .filter(p => p.uid !== currentUser.uid && (now - (p.lastActive || 0)) < PRESENCE_STALE_MS);
+      renderPresence(others);
+    }, (err) => console.warn('Presence sync error:', err));
+  }
+
+  function renderPresence(others){
+    const bar = document.getElementById('presenceBar');
+    if(!bar) return;
+    if(!others || others.length === 0){ bar.innerHTML = ''; return; }
+    const now = Date.now();
+    const initials = n => (n || '?').trim().charAt(0).toUpperCase();
+    const avatars = others.map(p =>
+      `<div class="presence-avatar" title="${escapeHtml(p.name)}${p.typing ? ' is typing…' : ' is viewing this list'}">${escapeHtml(initials(p.name))}</div>`
+    ).join('');
+    const typingOnes = others.filter(p => p.typing && (now - (p.lastActive || 0)) < 4000);
+    const typingText = typingOnes.length
+      ? `<span class="presence-typing">${escapeHtml(typingOnes.map(p => p.name).join(', '))} ${typingOnes.length === 1 ? 'is' : 'are'} typing…</span>`
+      : `<span>${others.length} other${others.length > 1 ? 's' : ''} viewing this list</span>`;
+    bar.innerHTML = `<div class="presence-avatars">${avatars}</div>${typingText}`;
+  }
+
+  function stopPresence(){
+    stopPresenceHeartbeat();
+    if(unsubscribePresence){ unsubscribePresence(); unsubscribePresence = null; }
+    if(typingClearTimer){ clearTimeout(typingClearTimer); typingClearTimer = null; }
+    renderPresence([]);
   }
 
   function renderAssigneeOptions(){
@@ -1310,6 +1532,7 @@
       tasksCache = tasks;
       lastSnapCount = snap.docs.length;
       renderTasks();
+      checkDueReminders();
       const loadMoreRow = document.getElementById('loadMoreRow');
       loadMoreRow.classList.toggle('hidden', lastSnapCount < pageSize);
     }, (err) => {
@@ -1458,9 +1681,8 @@
       const dueTag = t.dueDate
         ? `<div class="due-tag ${isOverdue(t)?'overdue':''}">${isOverdue(t)?'Overdue ':'Due '}${formatDueDate(t.dueDate)}</div>`
         : '';
-      const recurTag = t.recurrence
-        ? `<div class="recur-tag">↻ ${t.recurrence === 'weekly' ? 'Weekly' : 'Daily'}</div>`
-        : '';
+      const recurLabel = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[t.recurrence];
+      const recurTag = recurLabel ? `<div class="recur-tag">↻ ${recurLabel}</div>` : '';
       const tagChips = (t.tags || []).map(tag => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('');
       const listForTask = myLists.find(l => l.id === t.listId);
       const assigneeControl = listForTask
@@ -1486,6 +1708,7 @@
           <option value="" ${!t.recurrence?'selected':''}>No repeat</option>
           <option value="daily" ${t.recurrence==='daily'?'selected':''}>Repeat daily</option>
           <option value="weekly" ${t.recurrence==='weekly'?'selected':''}>Repeat weekly</option>
+          <option value="monthly" ${t.recurrence==='monthly'?'selected':''}>Repeat monthly</option>
         </select>
         <button class="save-btn" onclick="saveEditTask('${t.id}')" aria-label="Save task">✓</button>
         <button class="del-btn" onclick="cancelEditTask()" aria-label="Cancel edit">✕</button>
@@ -1703,6 +1926,8 @@
       tagsInput.value = '';
       recurrenceSelect.value = '';
       if(assigneeSelect) assigneeSelect.value = '';
+      if(typingClearTimer){ clearTimeout(typingClearTimer); typingClearTimer = null; }
+      writePresence({ typing: false });
     }catch(err){
       console.error('Failed to add task:', err);
       alert('Could not add task: ' + (err.message || err.code));
@@ -1743,12 +1968,28 @@
     return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
   }
 
+  // Calendar-month advance (handles variable month lengths, e.g. Jan 31 -> Feb 28).
+  function addMonthsToDateStr(dateStr, months){
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const targetMonth = dt.getMonth() + months;
+    dt.setDate(1); // avoid month-rollover surprises while changing the month
+    dt.setMonth(targetMonth);
+    const daysInTarget = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+    dt.setDate(Math.min(d, daysInTarget));
+    return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  }
+
+  function advanceRecurrenceDate(dateStr, recurrence){
+    if(recurrence === 'monthly') return addMonthsToDateStr(dateStr, 1);
+    return addDaysToDateStr(dateStr, recurrence === 'weekly' ? 7 : 1);
+  }
+
   async function spawnNextRecurrence(task){
-    const days = task.recurrence === 'weekly' ? 7 : 1;
     const todayStr = addDaysToDateStr(
       `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`, 0
     );
-    const nextDue = task.dueDate ? addDaysToDateStr(task.dueDate, days) : addDaysToDateStr(todayStr, days);
+    const nextDue = task.dueDate ? advanceRecurrenceDate(task.dueDate, task.recurrence) : advanceRecurrenceDate(todayStr, task.recurrence);
     const maxOrder = tasksCache.reduce((max, t) => Math.max(max, t.order ?? -1), -1);
     try{
       await addDoc(tasksCol, {
@@ -2037,7 +2278,7 @@
             ? r[idx('priority')].trim() : 'medium';
           const status = (r[idx('status')]||'').trim() === 'done' ? 'done' : 'pending';
           const tags = idx('tags') > -1 ? parseTagsInput((r[idx('tags')]||'').replace(/;/g, ',')) : [];
-          const recurrence = ['daily','weekly'].includes((r[idx('recurrence')]||'').trim())
+          const recurrence = ['daily','weekly','monthly'].includes((r[idx('recurrence')]||'').trim())
             ? r[idx('recurrence')].trim() : null;
           const dueDate = idx('duedate') > -1 && r[idx('duedate')].trim() ? r[idx('duedate')].trim() : null;
           const assigneeEmail = idx('assigneeemail') > -1 && r[idx('assigneeemail')].trim() ? r[idx('assigneeemail')].trim() : null;
@@ -2069,6 +2310,13 @@
     if(e.key === 'Enter') addTask();
   });
 
+  document.getElementById('newTaskTitle').addEventListener('input', () => {
+    if(!currentUser || currentListId === currentUser.uid) return; // only meaningful on shared lists
+    writePresence({ typing: true });
+    if(typingClearTimer) clearTimeout(typingClearTimer);
+    typingClearTimer = setTimeout(() => writePresence({ typing: false }), 2500);
+  });
+
   document.getElementById('searchInput').addEventListener('input', (e) => {
     searchQueryVal = e.target.value.trim();
     renderTasks();
@@ -2093,6 +2341,35 @@
     currentSort = e.target.value;
     renderTasks();
   });
+
+  // ---- PWA: service worker registration + install prompt ----
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('Service worker registration failed:', err); // non-fatal — app still works online
+      });
+    });
+  }
+
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = document.getElementById('installBtn');
+    if(btn) btn.classList.remove('hidden');
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    const btn = document.getElementById('installBtn');
+    if(btn) btn.classList.add('hidden');
+  });
+  async function installApp(){
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice; // resolves once the user accepts/dismisses
+    deferredInstallPrompt = null;
+    document.getElementById('installBtn').classList.add('hidden');
+  }
 
   // ---- Brand panel signature animation: the ledger ticks itself off in a loop ----
   (function runLedgerAnimation(){
