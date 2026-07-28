@@ -616,7 +616,7 @@
   import {
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc,
     doc, query, where, onSnapshot, writeBatch, setDoc, getDoc,
-    arrayUnion, arrayRemove, serverTimestamp, orderBy, limit
+    arrayUnion, arrayRemove, serverTimestamp, limit
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1292,17 +1292,21 @@
     // before shared lists existed (no listId field) still show up; shared-list
     // tasks the same user authored are filtered out client-side below.
     // Shared view: query the list's tasks directly so every member sees them.
-    // orderBy + limit keeps reads (and render cost) bounded as task counts grow —
+    // limit keeps reads (and render cost) bounded as task counts grow —
     // "Load more" below just raises the limit and re-subscribes.
+    // Note: no orderBy here on purpose — combining it with the where() above
+    // requires a Firestore composite index. We sort by 'order' client-side
+    // instead (below) so this works without any index setup.
     const q = isPersonal
-      ? query(tasksCol, where('userId', '==', currentUser.uid), orderBy('order'), limit(pageSize))
-      : query(tasksCol, where('listId', '==', currentListId), orderBy('order'), limit(pageSize));
+      ? query(tasksCol, where('userId', '==', currentUser.uid), limit(pageSize))
+      : query(tasksCol, where('listId', '==', currentListId), limit(pageSize));
     // includeMetadataChanges:true lets us render local (pending) writes instantly —
     // this is what gives add/toggle/delete their "optimistic" feel — and then
     // re-render silently once the server confirms.
     unsubscribeTasks = onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
       let tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if(isPersonal) tasks = tasks.filter(t => !t.listId || t.listId === currentUser.uid);
+      tasks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       tasksCache = tasks;
       lastSnapCount = snap.docs.length;
       renderTasks();
