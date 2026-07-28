@@ -163,7 +163,7 @@
   .task-list{display:flex;flex-direction:column;gap:8px}
   .task-item{
     background:var(--surface);border:1px solid var(--border);border-radius:10px;
-    padding:14px 16px;display:flex;align-items:center;gap:12px;
+    padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   }
   .task-item.done{opacity:.5}
   .task-item.done .task-title{text-decoration:line-through}
@@ -176,15 +176,56 @@
   .priority-low{background:rgba(91,141,239,.15);color:var(--blue)}
   .due-tag{font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;background:var(--surface-2);color:var(--muted);white-space:nowrap}
   .due-tag.overdue{background:rgba(239,74,92,.15);color:var(--danger)}
+  .recur-tag{font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;background:rgba(91,141,239,.12);color:var(--blue);white-space:nowrap}
+  .tag-chip{font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;background:var(--surface-2);color:var(--text);white-space:nowrap}
   .task-item[draggable="true"]{cursor:grab}
   .task-item.dragging{opacity:.4}
   .task-item.drag-over{border-color:var(--blue)}
   .drag-handle{color:var(--muted);cursor:grab;font-size:.9rem;flex-shrink:0}
+  .select-check{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
   .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px}
   .del-btn:hover{color:var(--danger)}
   .edit-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:4px}
   .edit-btn:hover{color:var(--blue)}
   .empty-state{text-align:center;padding:40px 0;color:var(--muted);font-size:.9rem}
+
+  /* ---- Subtasks / checklist ---- */
+  .subtask-toggle{
+    background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;
+    font-size:.72rem;padding:3px 8px;border-radius:20px;white-space:nowrap;font-family:'Inter',sans-serif;
+  }
+  .subtask-toggle:hover{color:var(--text);border-color:var(--blue)}
+  .progress-mini{width:44px;height:5px;border-radius:3px;background:var(--border);overflow:hidden;flex-shrink:0}
+  .progress-mini-fill{height:100%;background:var(--success);border-radius:3px}
+  .subtask-panel{flex-basis:100%;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+  .subtask-row{display:flex;align-items:center;gap:10px}
+  .subtask-check{width:16px;height:16px;border-radius:4px;border:2px solid var(--border);cursor:pointer;flex-shrink:0}
+  .subtask-check.checked{background:var(--success);border-color:var(--success)}
+  .subtask-label{flex:1;font-size:.85rem}
+  .subtask-label.done{opacity:.5;text-decoration:line-through}
+  .subtask-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:2px}
+  .subtask-del:hover{color:var(--danger)}
+  .subtask-add-row{display:flex;gap:6px;margin-top:4px}
+  .subtask-input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:.83rem;font-family:'Inter',sans-serif}
+  .subtask-add-row button{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:0 12px;cursor:pointer;font-weight:600}
+
+  /* ---- Bulk actions ---- */
+  .list-controls{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .select-all-label{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--muted);cursor:pointer;user-select:none}
+  .select-all-label input{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+  .bulk-bar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--blue);
+    border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.83rem;
+  }
+  .bulk-bar span{color:var(--muted);white-space:nowrap}
+  .bulk-bar button, .bulk-bar select{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;
+    padding:6px 12px;font-size:.8rem;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;
+  }
+  .bulk-bar button:hover{border-color:var(--blue)}
+  .bulk-bar .bulk-delete{color:var(--danger);border-color:var(--danger)}
+  .bulk-bar .bulk-delete:hover{background:rgba(239,74,92,.12)}
+  .bulk-bar .bulk-clear{margin-left:auto;color:var(--muted);border:none;background:none}
 
   /* ---- Loading skeleton ---- */
   @keyframes pulse{0%,100%{opacity:.4}50%{opacity:.8}}
@@ -202,9 +243,10 @@
 
   /* ---- Inline edit ---- */
   .edit-title-input{
-    flex:1;background:var(--surface-2);border:1px solid var(--blue);border-radius:6px;
+    flex:1 1 100%;background:var(--surface-2);border:1px solid var(--blue);border-radius:6px;
     padding:6px 8px;color:var(--text);font-size:.92rem;font-family:'Inter',sans-serif;
   }
+  .edit-tags-input{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:.78rem;font-family:'Inter',sans-serif;min-width:120px}
   .edit-priority-select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 6px;font-size:.78rem}
   .save-btn{background:none;border:none;color:var(--success);cursor:pointer;font-size:.95rem;padding:4px}
   .save-btn:hover{opacity:.75}
@@ -310,11 +352,17 @@
 
   <div class="add-task-row">
     <input type="text" id="newTaskTitle" placeholder="Add a new task...">
+    <input type="text" id="newTaskTags" placeholder="Tags (comma separated)" style="flex:1;min-width:140px">
     <input type="date" id="newTaskDueDate" title="Due date (optional)">
     <select id="newTaskPriority">
       <option value="low">Low</option>
       <option value="medium" selected>Medium</option>
       <option value="high">High</option>
+    </select>
+    <select id="newTaskRecurrence" title="Repeat">
+      <option value="">No repeat</option>
+      <option value="daily">Repeat daily</option>
+      <option value="weekly">Repeat weekly</option>
     </select>
     <button onclick="addTask()">Add</button>
   </div>
@@ -332,6 +380,9 @@
       <option value="medium">Medium</option>
       <option value="low">Low</option>
     </select>
+    <select id="filterTag">
+      <option value="all">All tags</option>
+    </select>
     <select id="sortSelect">
       <option value="custom">Custom order</option>
       <option value="newest">Newest first</option>
@@ -340,6 +391,23 @@
     </select>
   </div>
   <div class="drag-hint" id="dragHint"></div>
+
+  <div class="list-controls">
+    <label class="select-all-label"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"> Select all visible</label>
+  </div>
+  <div class="bulk-bar hidden" id="bulkBar">
+    <span id="bulkCount">0 selected</span>
+    <button onclick="bulkMarkDone()">Mark done</button>
+    <button onclick="bulkMarkPending()">Mark pending</button>
+    <select id="bulkPrioritySelect" onchange="bulkSetPriority(this.value)">
+      <option value="">Set priority…</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+    </select>
+    <button class="bulk-delete" onclick="bulkDelete()">Delete</button>
+    <button class="bulk-clear" onclick="clearSelection()">Clear</button>
+  </div>
 
   <div class="task-list" id="taskList"></div>
 </div>
@@ -386,8 +454,11 @@
   let currentSort = 'custom';
   let filterStatusVal = 'all';
   let filterPriorityVal = 'all';
+  let filterTagVal = 'all';
   let searchQueryVal = '';
   let draggedTaskId = null;
+  let expandedTasks = new Set();
+  let selectedTaskIds = new Set();
 
   window.showRegister = showRegister;
   window.showLogin = showLogin;
@@ -406,6 +477,17 @@
   window.dragTaskLeave = dragTaskLeave;
   window.dragTaskDrop = dragTaskDrop;
   window.dragTaskEnd = dragTaskEnd;
+  window.toggleExpandTask = toggleExpandTask;
+  window.addSubtask = addSubtask;
+  window.toggleSubtask = toggleSubtask;
+  window.deleteSubtask = deleteSubtask;
+  window.toggleSelectTask = toggleSelectTask;
+  window.toggleSelectAll = toggleSelectAll;
+  window.bulkMarkDone = bulkMarkDone;
+  window.bulkMarkPending = bulkMarkPending;
+  window.bulkSetPriority = bulkSetPriority;
+  window.bulkDelete = bulkDelete;
+  window.clearSelection = clearSelection;
 
   function showRegister(){
     document.getElementById('loginForm').classList.add('hidden');
@@ -630,14 +712,35 @@
     });
   }
 
+  function getTask(id){
+    return tasksCache.find(t => t.id === id);
+  }
+
   function filterTasks(tasks){
     return tasks.filter(t => {
       if(filterStatusVal === 'pending' && t.status === 'done') return false;
       if(filterStatusVal === 'done' && t.status !== 'done') return false;
       if(filterPriorityVal !== 'all' && t.priority !== filterPriorityVal) return false;
+      if(filterTagVal !== 'all' && !(t.tags || []).includes(filterTagVal)) return false;
       if(searchQueryVal && !t.title.toLowerCase().includes(searchQueryVal.toLowerCase())) return false;
       return true;
     });
+  }
+
+  function updateTagFilterOptions(){
+    const select = document.getElementById('filterTag');
+    const allTags = new Set();
+    tasksCache.forEach(t => (t.tags || []).forEach(tag => allTags.add(tag)));
+    const sorted = Array.from(allTags).sort((a, b) => a.localeCompare(b));
+    const current = select.value;
+    select.innerHTML = '<option value="all">All tags</option>' +
+      sorted.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('');
+    // Keep the current selection if it's still a valid tag; otherwise fall back to "all"
+    if(sorted.includes(current)){
+      select.value = current;
+    }else{
+      filterTagVal = 'all';
+    }
   }
 
   function sortTasks(tasks){
@@ -661,7 +764,7 @@
   }
 
   function isDragEnabled(){
-    return currentSort === 'custom' && filterStatusVal === 'all' && filterPriorityVal === 'all' && !searchQueryVal;
+    return currentSort === 'custom' && filterStatusVal === 'all' && filterPriorityVal === 'all' && filterTagVal === 'all' && !searchQueryVal;
   }
 
   function updateDragHint(){
@@ -689,8 +792,16 @@
     return t.dueDate < todayStr;
   }
 
+  function subtaskStats(t){
+    const subtasks = t.subtasks || [];
+    const total = subtasks.length;
+    const done = subtasks.filter(s => s.done).length;
+    return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+  }
+
   function renderTasks(){
     updateDragHint();
+    updateTagFilterOptions();
     const list = document.getElementById('taskList');
     document.getElementById('statTotal').textContent = tasksCache.length;
     document.getElementById('statDone').textContent = tasksCache.filter(t=>t.status==='done').length;
@@ -698,6 +809,23 @@
 
     const tasks = sortTasks(filterTasks(tasksCache));
     const dragOn = isDragEnabled();
+
+    // Drop any selected ids that are no longer visible/present, keep the bulk bar honest
+    const visibleIds = new Set(tasks.map(t => t.id));
+    Array.from(selectedTaskIds).forEach(id => { if(!tasksCache.some(t => t.id === id)) selectedTaskIds.delete(id); });
+
+    const bulkBar = document.getElementById('bulkBar');
+    const bulkCount = document.getElementById('bulkCount');
+    if(selectedTaskIds.size > 0){
+      bulkBar.classList.remove('hidden');
+      bulkCount.textContent = `${selectedTaskIds.size} selected`;
+    }else{
+      bulkBar.classList.add('hidden');
+    }
+    const selectAllBox = document.getElementById('selectAllCheckbox');
+    const visibleSelectedCount = tasks.filter(t => selectedTaskIds.has(t.id)).length;
+    selectAllBox.checked = tasks.length > 0 && visibleSelectedCount === tasks.length;
+    selectAllBox.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < tasks.length;
 
     if(tasksCache.length === 0){
       list.innerHTML = '<div class="empty-state">No tasks yet — add one above to get started.</div>';
@@ -711,6 +839,10 @@
       const dueTag = t.dueDate
         ? `<div class="due-tag ${isOverdue(t)?'overdue':''}">${isOverdue(t)?'Overdue ':'Due '}${formatDueDate(t.dueDate)}</div>`
         : '';
+      const recurTag = t.recurrence
+        ? `<div class="recur-tag">↻ ${t.recurrence === 'weekly' ? 'Weekly' : 'Daily'}</div>`
+        : '';
+      const tagChips = (t.tags || []).map(tag => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('');
 
       if(t.id === editingTaskId){
         return `
@@ -723,20 +855,53 @@
           <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
           <option value="high" ${t.priority==='high'?'selected':''}>High</option>
         </select>
+        <input type="text" class="edit-tags-input" id="editTags-${t.id}" placeholder="Tags, comma separated" value="${escapeHtml((t.tags||[]).join(', '))}" />
+        <select class="edit-priority-select" id="editRecurrence-${t.id}">
+          <option value="" ${!t.recurrence?'selected':''}>No repeat</option>
+          <option value="daily" ${t.recurrence==='daily'?'selected':''}>Repeat daily</option>
+          <option value="weekly" ${t.recurrence==='weekly'?'selected':''}>Repeat weekly</option>
+        </select>
         <button class="save-btn" onclick="saveEditTask('${t.id}')" aria-label="Save task">✓</button>
         <button class="del-btn" onclick="cancelEditTask()" aria-label="Cancel edit">✕</button>
       </div>`;
       }
+
+      const { total: subTotal, done: subDone, pct: subPct } = subtaskStats(t);
+      const expanded = expandedTasks.has(t.id);
+      const subtaskToggle = `<button class="subtask-toggle" onclick="toggleExpandTask('${t.id}')">☰ ${subTotal ? `${subDone}/${subTotal}` : 'Steps'}</button>`;
+      const progressMini = subTotal
+        ? `<div class="progress-mini" title="${subDone}/${subTotal} steps done"><div class="progress-mini-fill" style="width:${subPct}%"></div></div>`
+        : '';
+      const subtaskPanel = expanded ? `
+        <div class="subtask-panel">
+          ${(t.subtasks || []).map(s => `
+            <div class="subtask-row">
+              <div class="subtask-check ${s.done?'checked':''}" onclick="toggleSubtask('${t.id}','${s.id}')"></div>
+              <div class="subtask-label ${s.done?'done':''}">${escapeHtml(s.title)}</div>
+              <button class="subtask-del" onclick="deleteSubtask('${t.id}','${s.id}')" aria-label="Delete step">✕</button>
+            </div>`).join('')}
+          <div class="subtask-add-row">
+            <input type="text" class="subtask-input" id="subtaskInput-${t.id}" placeholder="Add a step..." onkeypress="if(event.key==='Enter') addSubtask('${t.id}')">
+            <button onclick="addSubtask('${t.id}')">+</button>
+          </div>
+        </div>` : '';
+
       return `
       <div class="task-item ${t.status==='done'?'done':''}" id="task-${t.id}"
            ${dragOn ? `draggable="true" ondragstart="dragTaskStart(event,'${t.id}')" ondragover="dragTaskOver(event,'${t.id}')" ondragleave="dragTaskLeave(event,'${t.id}')" ondrop="dragTaskDrop(event,'${t.id}')" ondragend="dragTaskEnd(event)"` : ''}>
         ${dragOn ? '<span class="drag-handle">⠿</span>' : ''}
+        <input type="checkbox" class="select-check" ${selectedTaskIds.has(t.id)?'checked':''} onchange="toggleSelectTask('${t.id}', this.checked)" aria-label="Select task">
         <div class="task-check ${t.status==='done'?'checked':''}" role="checkbox" aria-checked="${t.status==='done'}" tabindex="0" onclick="toggleTask('${t.id}', '${t.status}')"></div>
         <div class="task-title">${escapeHtml(t.title)}</div>
+        ${progressMini}
+        ${tagChips}
+        ${recurTag}
         ${dueTag}
         <div class="priority-tag priority-${t.priority}">${t.priority}</div>
+        ${subtaskToggle}
         <button class="edit-btn" onclick="startEditTask('${t.id}')" aria-label="Edit task">✎</button>
         <button class="del-btn" onclick="deleteTask('${t.id}')" aria-label="Delete task">✕</button>
+        ${subtaskPanel}
       </div>`;
     }).join('');
 
@@ -822,23 +987,42 @@
     const input = document.getElementById(`editInput-${id}`);
     const prioritySelect = document.getElementById(`editPriority-${id}`);
     const dueDateInput = document.getElementById(`editDueDate-${id}`);
+    const tagsInput = document.getElementById(`editTags-${id}`);
+    const recurrenceSelect = document.getElementById(`editRecurrence-${id}`);
     const title = input.value.trim();
     if(!title){
       input.classList.add('input-error');
       setTimeout(() => input.classList.remove('input-error'), 400);
       return;
     }
+    const tags = parseTagsInput(tagsInput.value);
     editingTaskId = null;
     try{
       await updateDoc(doc(db, 'tasks', id), {
         title,
         priority: prioritySelect.value,
-        dueDate: dueDateInput.value || null
+        dueDate: dueDateInput.value || null,
+        tags,
+        recurrence: recurrenceSelect.value || null
       });
     }catch(err){
       console.error('Failed to save edit:', err);
       alert('Could not save changes: ' + (err.message || err.code));
     }
+  }
+
+  function parseTagsInput(raw){
+    const seen = new Set();
+    const tags = [];
+    raw.split(',').map(s => s.trim()).filter(Boolean).forEach(tag => {
+      const key = tag.toLowerCase();
+      if(!seen.has(key)){ seen.add(key); tags.push(tag); }
+    });
+    return tags;
+  }
+
+  function generateLocalId(){
+    return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
   function escapeHtml(str){
@@ -862,6 +1046,10 @@
     const priority = document.getElementById('newTaskPriority').value;
     const dueDateInput = document.getElementById('newTaskDueDate');
     const dueDate = dueDateInput.value || null;
+    const tagsInput = document.getElementById('newTaskTags');
+    const tags = parseTagsInput(tagsInput.value);
+    const recurrenceSelect = document.getElementById('newTaskRecurrence');
+    const recurrence = recurrenceSelect.value || null;
     const maxOrder = tasksCache.reduce((max, t) => Math.max(max, t.order ?? -1), -1);
     addingTask = true;
     try{
@@ -872,12 +1060,17 @@
         title,
         priority,
         dueDate,
+        tags,
+        recurrence,
+        subtasks: [],
         status: 'pending',
         createdAt: Date.now(),
         order: maxOrder + 1
       });
       titleInput.value = '';
       dueDateInput.value = '';
+      tagsInput.value = '';
+      recurrenceSelect.value = '';
     }catch(err){
       console.error('Failed to add task:', err);
       alert('Could not add task: ' + (err.message || err.code));
@@ -890,18 +1083,179 @@
     const newStatus = currentStatus === 'done' ? 'pending' : 'done';
     try{
       await updateDoc(doc(db, 'tasks', id), { status: newStatus });
+      if(newStatus === 'done'){
+        const task = getTask(id);
+        if(task && task.recurrence){
+          await spawnNextRecurrence(task);
+        }
+      }
     }catch(err){
       console.error('Failed to update task:', err);
       alert('Could not update task: ' + (err.message || err.code));
     }
   }
 
+  function addDaysToDateStr(dateStr, days){
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + days);
+    return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  }
+
+  async function spawnNextRecurrence(task){
+    const days = task.recurrence === 'weekly' ? 7 : 1;
+    const todayStr = addDaysToDateStr(
+      `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`, 0
+    );
+    const nextDue = task.dueDate ? addDaysToDateStr(task.dueDate, days) : addDaysToDateStr(todayStr, days);
+    const maxOrder = tasksCache.reduce((max, t) => Math.max(max, t.order ?? -1), -1);
+    try{
+      await addDoc(tasksCol, {
+        userId: currentUser.uid,
+        title: task.title,
+        priority: task.priority,
+        dueDate: nextDue,
+        tags: task.tags || [],
+        recurrence: task.recurrence,
+        subtasks: (task.subtasks || []).map(s => ({ ...s, done: false })),
+        status: 'pending',
+        createdAt: Date.now(),
+        order: maxOrder + 1
+      });
+    }catch(err){
+      console.error('Failed to create the next recurring task:', err);
+    }
+  }
+
   async function deleteTask(id){
     try{
       await deleteDoc(doc(db, 'tasks', id));
+      selectedTaskIds.delete(id);
+      expandedTasks.delete(id);
     }catch(err){
       console.error('Failed to delete task:', err);
       alert('Could not delete task: ' + (err.message || err.code));
+    }
+  }
+
+  // ---- Subtasks / checklist ----
+  function toggleExpandTask(id){
+    if(expandedTasks.has(id)) expandedTasks.delete(id);
+    else expandedTasks.add(id);
+    renderTasks();
+  }
+
+  async function addSubtask(taskId){
+    const input = document.getElementById(`subtaskInput-${taskId}`);
+    const title = input.value.trim();
+    if(!title){
+      input.classList.add('input-error');
+      setTimeout(() => input.classList.remove('input-error'), 400);
+      return;
+    }
+    const task = getTask(taskId);
+    const newSubtasks = [...(task?.subtasks || []), { id: generateLocalId(), title, done: false }];
+    input.value = '';
+    try{
+      await updateDoc(doc(db, 'tasks', taskId), { subtasks: newSubtasks });
+    }catch(err){
+      console.error('Failed to add step:', err);
+      alert('Could not add step: ' + (err.message || err.code));
+    }
+  }
+
+  async function toggleSubtask(taskId, subtaskId){
+    const task = getTask(taskId);
+    if(!task) return;
+    const newSubtasks = (task.subtasks || []).map(s => s.id === subtaskId ? { ...s, done: !s.done } : s);
+    try{
+      await updateDoc(doc(db, 'tasks', taskId), { subtasks: newSubtasks });
+    }catch(err){
+      console.error('Failed to update step:', err);
+      alert('Could not update step: ' + (err.message || err.code));
+    }
+  }
+
+  async function deleteSubtask(taskId, subtaskId){
+    const task = getTask(taskId);
+    if(!task) return;
+    const newSubtasks = (task.subtasks || []).filter(s => s.id !== subtaskId);
+    try{
+      await updateDoc(doc(db, 'tasks', taskId), { subtasks: newSubtasks });
+    }catch(err){
+      console.error('Failed to delete step:', err);
+      alert('Could not delete step: ' + (err.message || err.code));
+    }
+  }
+
+  // ---- Bulk actions ----
+  function toggleSelectTask(id, checked){
+    if(checked) selectedTaskIds.add(id);
+    else selectedTaskIds.delete(id);
+    renderTasks();
+  }
+
+  function toggleSelectAll(checked){
+    const visible = sortTasks(filterTasks(tasksCache));
+    if(checked){
+      visible.forEach(t => selectedTaskIds.add(t.id));
+    }else{
+      visible.forEach(t => selectedTaskIds.delete(t.id));
+    }
+    renderTasks();
+  }
+
+  function clearSelection(){
+    selectedTaskIds.clear();
+    renderTasks();
+  }
+
+  async function bulkMarkDone(){ await bulkSetStatus('done'); }
+  async function bulkMarkPending(){ await bulkSetStatus('pending'); }
+
+  async function bulkSetStatus(status){
+    if(selectedTaskIds.size === 0) return;
+    const ids = Array.from(selectedTaskIds);
+    try{
+      const batch = writeBatch(db);
+      ids.forEach(id => batch.update(doc(db, 'tasks', id), { status }));
+      await batch.commit();
+      clearSelection();
+    }catch(err){
+      console.error('Bulk status update failed:', err);
+      alert('Could not update selected tasks: ' + (err.message || err.code));
+    }
+  }
+
+  async function bulkSetPriority(priority){
+    const select = document.getElementById('bulkPrioritySelect');
+    if(!priority || selectedTaskIds.size === 0){ select.value = ''; return; }
+    const ids = Array.from(selectedTaskIds);
+    try{
+      const batch = writeBatch(db);
+      ids.forEach(id => batch.update(doc(db, 'tasks', id), { priority }));
+      await batch.commit();
+      clearSelection();
+    }catch(err){
+      console.error('Bulk priority update failed:', err);
+      alert('Could not update selected tasks: ' + (err.message || err.code));
+    }finally{
+      select.value = '';
+    }
+  }
+
+  async function bulkDelete(){
+    if(selectedTaskIds.size === 0) return;
+    const ids = Array.from(selectedTaskIds);
+    if(!confirm(`Delete ${ids.length} selected task${ids.length > 1 ? 's' : ''}? This can't be undone.`)) return;
+    try{
+      const batch = writeBatch(db);
+      ids.forEach(id => batch.delete(doc(db, 'tasks', id)));
+      await batch.commit();
+      clearSelection();
+    }catch(err){
+      console.error('Bulk delete failed:', err);
+      alert('Could not delete selected tasks: ' + (err.message || err.code));
     }
   }
 
@@ -921,6 +1275,11 @@
 
   document.getElementById('filterPriority').addEventListener('change', (e) => {
     filterPriorityVal = e.target.value;
+    renderTasks();
+  });
+
+  document.getElementById('filterTag').addEventListener('change', (e) => {
+    filterTagVal = e.target.value;
     renderTasks();
   });
 
