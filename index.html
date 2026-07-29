@@ -21,6 +21,19 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TaskFlow">
+<!-- Error monitoring: reports uncaught exceptions/rejections in production so real -->
+<!-- user-facing failures surface somewhere other than a browser console nobody reads. -->
+<!-- TODO: replace with your own DSN from sentry.io → Project Settings → Client Keys. -->
+<script src="https://browser.sentry-cdn.com/8.9.2/bundle.tracing.min.js" crossorigin="anonymous"></script>
+<script>
+  if(window.Sentry && location.hostname !== 'localhost'){
+    Sentry.init({
+      dsn: "YOUR_SENTRY_DSN",
+      tracesSampleRate: 0.2,
+      environment: location.hostname
+    });
+  }
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -642,6 +655,9 @@
     doc, query, where, onSnapshot, writeBatch, setDoc, getDoc,
     arrayUnion, arrayRemove, serverTimestamp, limit, enableIndexedDbPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import {
+    initializeAppCheck, ReCaptchaV3Provider
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCdaqJb_ylNWeG5jGkw8EYCeeTXK9tzXyY",
@@ -655,6 +671,21 @@
 
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
+
+  // App Check: blocks requests to Auth/Firestore that don't come from this real,
+  // registered web app (e.g. a script hitting your Firestore endpoints directly).
+  // TODO: replace with the reCAPTCHA v3 site key from Firebase Console →
+  // App Check → Apps → task-flow-399d2 → register a "Web" app with reCAPTCHA v3.
+  // Until that's set, App Check is inactive and everything works as before —
+  // it fails open here in dev, but enforce it in Firestore Rules once configured
+  // (Console → App Check → Enforce) so unregistered clients are actually blocked.
+  if(location.hostname !== 'localhost'){
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('6Lcik2otAAAAAJi6kS_W0sgY7RaQJ82kBAOVsvob'),
+      isTokenAutoRefreshEnabled: true
+    });
+  }
+
   const auth = getAuth(app);
   const db = getFirestore(app);
   // Offline persistence: lets previously-synced tasks load (read-only until reconnect)
@@ -671,6 +702,14 @@
   const listsCol = collection(db, "lists");
   const usersCol = collection(db, "users");
   const presenceCol = collection(db, "presence");
+
+  // Central error reporter: keeps the existing console.error() behavior for local
+  // debugging, and additionally forwards to Sentry (when configured) so failures
+  // in production surface somewhere a developer actually sees them.
+  function reportError(message, err){
+    console.error(message, err);
+    if(window.Sentry) Sentry.captureException(err, { extra: { message } });
+  }
 
   let currentUser = null;
   let unsubscribeTasks = null;
@@ -1044,7 +1083,7 @@
     try{
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
-      sendEmailVerification(cred.user).catch(err => console.error('Failed to send verification email:', err));
+      sendEmailVerification(cred.user).catch(err => reportError('Failed to send verification email:', err));
       // onAuthStateChanged below handles entering the dashboard
     }catch(err){
       errEl.textContent = friendlyAuthError(err);
@@ -1115,7 +1154,7 @@
     setDoc(doc(db, 'users', currentUser.uid), {
       email: currentUser.email,
       displayName: displayName
-    }, { merge: true }).catch(err => console.error('Failed to sync user profile:', err));
+    }, { merge: true }).catch(err => reportError('Failed to sync user profile:', err));
     updateVerifyBanner();
     subscribeToLists();
     subscribeToTasks();
@@ -1137,7 +1176,7 @@
       await sendEmailVerification(currentUser);
       alert('Verification email sent — check your inbox.');
     }catch(err){
-      console.error('Failed to send verification email:', err);
+      reportError('Failed to send verification email:', err);
       alert('Could not send verification email: ' + (err.message || err.code));
     }
   }
@@ -1150,7 +1189,7 @@
       if(currentUser.emailVerified) alert("You're verified!");
       else alert("Still not verified yet — check your inbox (and spam folder).");
     }catch(err){
-      console.error('Failed to refresh verification status:', err);
+      reportError('Failed to refresh verification status:', err);
     }
   }
 
@@ -1229,7 +1268,7 @@
       document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
       closeProfileModal();
     }catch(err){
-      console.error('Failed to update profile:', err);
+      reportError('Failed to update profile:', err);
       errorEl.textContent = 'Could not save changes: ' + (err.message || err.code);
     }finally{
       btn.disabled = false;
@@ -1267,7 +1306,7 @@
       await deleteUser(currentUser);
       // onAuthStateChanged handles returning to the auth screen.
     }catch(err){
-      console.error('Account deletion failed:', err);
+      reportError('Account deletion failed:', err);
       if(err.code === 'auth/requires-recent-login'){
         alert('For security, please log out and log back in, then try deleting your account again.');
       }else{
@@ -1286,7 +1325,7 @@
       myLists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderListSelect();
       renderAssigneeOptions();
-    }, (err) => console.error('List sync error:', err));
+    }, (err) => reportError('List sync error:', err));
   }
 
   function getCurrentList(){
@@ -1446,7 +1485,7 @@
       emailInput.value = '';
       renderShareModalMembers();
     }catch(err){
-      console.error('Invite failed:', err);
+      reportError('Invite failed:', err);
       errorEl.textContent = 'Could not send invite: ' + (err.message || err.code);
     }finally{
       btn.disabled = false;
@@ -1462,7 +1501,7 @@
       await updateDoc(doc(db, 'lists', list.id), updates);
       renderShareModalMembers();
     }catch(err){
-      console.error('Failed to remove member:', err);
+      reportError('Failed to remove member:', err);
       alert('Could not remove member: ' + (err.message || err.code));
     }
   }
@@ -1496,7 +1535,7 @@
       // renderListSelect() will run on the next 'lists' snapshot; select it once it appears
       setTimeout(() => { document.getElementById('listSelect').value = ref.id; switchList(ref.id); }, 300);
     }catch(err){
-      console.error('Failed to create list:', err);
+      reportError('Failed to create list:', err);
       errorEl.textContent = 'Could not create list: ' + (err.message || err.code);
     }finally{
       btn.disabled = false;
@@ -1536,7 +1575,7 @@
       const loadMoreRow = document.getElementById('loadMoreRow');
       loadMoreRow.classList.toggle('hidden', lastSnapCount < pageSize);
     }, (err) => {
-      console.error('Task sync error:', err);
+      reportError('Task sync error:', err);
       const list = document.getElementById('taskList');
       list.innerHTML = `<div class="empty-state">Couldn't load tasks: ${escapeHtml(err.message || err.code || 'unknown error')}</div>`;
     });
@@ -1812,7 +1851,7 @@
       reordered.forEach(t => batch.update(doc(db, 'tasks', t.id), { order: t.order }));
       await batch.commit();
     }catch(err){
-      console.error('Failed to save order:', err);
+      reportError('Failed to save order:', err);
       alert('Could not save the new order: ' + (err.message || err.code));
     }
   }
@@ -1856,7 +1895,7 @@
         recurrence: recurrenceSelect.value || null
       });
     }catch(err){
-      console.error('Failed to save edit:', err);
+      reportError('Failed to save edit:', err);
       alert('Could not save changes: ' + (err.message || err.code));
     }
   }
@@ -1929,7 +1968,7 @@
       if(typingClearTimer){ clearTimeout(typingClearTimer); typingClearTimer = null; }
       writePresence({ typing: false });
     }catch(err){
-      console.error('Failed to add task:', err);
+      reportError('Failed to add task:', err);
       alert('Could not add task: ' + (err.message || err.code));
     }finally{
       addingTask = false;
@@ -1940,7 +1979,7 @@
     try{
       await updateDoc(doc(db, 'tasks', id), { assigneeEmail: email || null });
     }catch(err){
-      console.error('Failed to reassign task:', err);
+      reportError('Failed to reassign task:', err);
       alert('Could not reassign task: ' + (err.message || err.code));
     }
   }
@@ -1956,7 +1995,7 @@
         }
       }
     }catch(err){
-      console.error('Failed to update task:', err);
+      reportError('Failed to update task:', err);
       alert('Could not update task: ' + (err.message || err.code));
     }
   }
@@ -2007,7 +2046,7 @@
         order: maxOrder + 1
       });
     }catch(err){
-      console.error('Failed to create the next recurring task:', err);
+      reportError('Failed to create the next recurring task:', err);
     }
   }
 
@@ -2030,7 +2069,7 @@
     try{
       await deleteDoc(doc(db, 'tasks', id));
     }catch(err){
-      console.error('Failed to delete task:', err);
+      reportError('Failed to delete task:', err);
       alert('Could not delete task: ' + (err.message || err.code));
       renderTasks();
     }
@@ -2087,7 +2126,7 @@
     try{
       await updateDoc(doc(db, 'tasks', taskId), { subtasks: newSubtasks });
     }catch(err){
-      console.error('Failed to add step:', err);
+      reportError('Failed to add step:', err);
       alert('Could not add step: ' + (err.message || err.code));
     }
   }
@@ -2099,7 +2138,7 @@
     try{
       await updateDoc(doc(db, 'tasks', taskId), { subtasks: newSubtasks });
     }catch(err){
-      console.error('Failed to update step:', err);
+      reportError('Failed to update step:', err);
       alert('Could not update step: ' + (err.message || err.code));
     }
   }
@@ -2111,7 +2150,7 @@
     try{
       await updateDoc(doc(db, 'tasks', taskId), { subtasks: newSubtasks });
     }catch(err){
-      console.error('Failed to delete step:', err);
+      reportError('Failed to delete step:', err);
       alert('Could not delete step: ' + (err.message || err.code));
     }
   }
@@ -2150,7 +2189,7 @@
       await batch.commit();
       clearSelection();
     }catch(err){
-      console.error('Bulk status update failed:', err);
+      reportError('Bulk status update failed:', err);
       alert('Could not update selected tasks: ' + (err.message || err.code));
     }
   }
@@ -2165,7 +2204,7 @@
       await batch.commit();
       clearSelection();
     }catch(err){
-      console.error('Bulk priority update failed:', err);
+      reportError('Bulk priority update failed:', err);
       alert('Could not update selected tasks: ' + (err.message || err.code));
     }finally{
       select.value = '';
@@ -2299,7 +2338,7 @@
         imported += chunk.length;
       }
     }catch(err){
-      console.error('Import failed:', err);
+      reportError('Import failed:', err);
       alert('Could not import CSV: ' + (err.message || err.code));
     }finally{
       fileInput.value = '';
